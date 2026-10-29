@@ -6,6 +6,7 @@ import pg8000
 from aiogram import types, Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+#КАКОЙ ТО ТЕКСТ
 # ID Создателя бота (только он управляет заметками)
 CREATOR_BOT_ID = 7847585206  # Поменяйте на ваш реальный Telegram ID
 
