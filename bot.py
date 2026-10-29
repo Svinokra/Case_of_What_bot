@@ -192,13 +192,14 @@ async def cmd_open_menu(message: types.Message):
     # Сохраняем ID нового меню в память
     user_menus[user_id] = sent_menu.message_id
 
-@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("open_") | F.data.startswith("back_to_profile"))
+@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("open_") | F.data.startswith("cancel_") | F.data.startswith("back_"))
 async def handle_menu_clicks(callback: types.CallbackQuery):
-    data_parts = callback.data.split(":")
+    # Разделяем строго на две части: действие и все остальное с ID
+    data_parts = callback.data.split(":", 1)
     action_data = data_parts[0]
     
-    # Извлекаем ID владельца меню (последний элемент в строке)
-    owner_id = int(data_parts[-1])
+    # Извлекаем ID владельца (он всегда в самом конце строки)
+    owner_id = int(callback.data.split(":")[-1])
     
     if callback.from_user.id != owner_id:
         await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
@@ -206,6 +207,7 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
 
     await callback.answer()
 
+    # Корневые разделы из вашей оригинальной архитектуры
     if action_data == "menu_profile":
         import menu_profile
         await menu_profile.open_profile(callback, owner_id)
@@ -222,8 +224,8 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import menu_info
         await menu_info.open_info(callback)
         
-    # Передаем управление в menu_profile.py для обработки подменю изменений
-    if action_data in ["edit_profile", "open_edit_menu", "edit_gender", "set_gender", "edit_desc", "back_to_profile"]:
+    # Точечный шлюз: передаем абсолютно все остальные кнопки изменений в menu_profile.py
+    if action_data in ["edit_profile", "open_edit_menu", "edit_gender", "set_gender", "edit_desc", "cancel_desc", "back_to_profile"]:
         import menu_profile
         await menu_profile.handle_profile_callbacks(callback)
 
