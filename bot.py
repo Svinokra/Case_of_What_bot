@@ -194,10 +194,14 @@ async def cmd_open_menu(message: types.Message):
     user_menus[user_id] = sent_menu.message_id
 
 
-@dp.callback_query(F.data.startswith("menu_"))
+@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("cancel_") | F.data.startswith("back_to_profile"))
 async def handle_menu_clicks(callback: types.CallbackQuery):
-    action_data, owner_id_str = callback.data.split(":")
-    owner_id = int(owner_id_str)
+    # ИСПРАВЛЕНО: Безопасное разделение строки. Берем только первый элемент как действие, остальное не ломает код
+    data_parts = callback.data.split(":")
+    action_data = data_parts[0]
+    
+    # Извлекаем ID владельца меню (он всегда идет самым последним элементом в callback_data)
+    owner_id = int(data_parts[-1])
     
     if callback.from_user.id != owner_id:
         await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
@@ -207,7 +211,7 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
 
     if action_data == "menu_profile":
         import menu_profile
-        await menu_profile.open_profile(callback, owner_id) # Передаем id владельца меню, чтобы проверить права
+        await menu_profile.open_profile(callback, owner_id)
     elif action_data == "menu_shop":
         import menu_shop
         await menu_shop.open_shop(callback)
@@ -220,6 +224,11 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     elif action_data == "menu_info":
         import menu_info
         await menu_info.open_info(callback)
+        
+    # Добавляем перехват кнопок изменения в основной роутер
+    if action_data in ["edit_profile", "open_edit_menu", "cancel_desc", "edit_gender", "set_gender", "edit_desc", "back_to_profile"]:
+        import menu_profile
+        await menu_profile.handle_profile_callbacks(callback)
 
 @dp.callback_query(F.data.startswith("back_to_menu:"))
 async def handle_back_to_menu(callback: types.CallbackQuery):
