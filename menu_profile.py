@@ -65,10 +65,16 @@ def get_or_create_profile(user_id: int, username: str, full_name: str):
 async def get_user_title(chat_id: int, user_id: int, bot: Bot) -> str:
     try:
         member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        
+        # Проверяем кастомный тег у любого статуса, если Telegram его отдает
+        if hasattr(member, 'custom_title') and member.custom_title:
+            return member.custom_title
+            
         if member.status == "creator":
-            return member.custom_title if member.custom_title else "Владелец"
+            return "Владелец"
         elif member.status == "administrator":
-            return member.custom_title if member.custom_title else "Администратор"
+            return "Администратор"
+            
         return "Участник"
     except Exception:
         return "Участник"
@@ -85,7 +91,7 @@ def make_profile_text(username: str, title: str, db_row) -> str:
         f"🎖️ Должность: {title}\n"
         f"🪙 СЧ койны: {coins}\n"
         f"✨Репутация: {reputation}\n"
-        f"📅 Появление в группе: {date_str}\n"
+        f"📅 Во вселенной бота: {date_str}\n"
         f"🔖 Заметка от создателя:\n{note}\n\n"
         f"🏆 Место в рейтинге по СЧ койнам: 0\n"
         f"🎗️ Место в рейтинге по репутации: 0"
@@ -290,12 +296,10 @@ async def cancel_description_input(callback: types.CallbackQuery, target_id: int
 
 # ЛОГИКА ЗАМЕТОК (ТОЛЬКО ДЛЯ СОЗДАТЕЛЯ БОТА)
 async def handle_note_management(message: types.Message):
-    # Жесткая проверка: только Создатель бота
     if message.from_user.id != CREATOR_BOT_ID:
         return
 
     target_user = message.reply_to_message.from_user
-    # Убедимся, что профиль цели создан
     get_or_create_profile(target_user.id, target_user.username, target_user.full_name)
     
     conn = get_db_connection()
@@ -311,7 +315,8 @@ async def handle_note_management(message: types.Message):
             await message.reply("Этому участнику была присвоена заметка")
         
         elif message.text.startswith("/delete_note"):
-            cursor.execute("UPDATE user_profiles SET note = 'Отсутствует' WHERE user_id = %s", (target_user.id))
+            # Исправлено: добавлен кортеж (target_user.id,) для корректного SQL
+            cursor.execute("UPDATE user_profiles SET note = 'Отсутствует' WHERE user_id = %s", (target_user.id,))
             conn.commit()
             await message.reply("Заметка была удалена из профиля этого участника")
     finally:
@@ -323,8 +328,7 @@ async def handle_profile_callbacks(callback: types.CallbackQuery):
     data_parts = callback.data.split(":")
     action = data_parts[0]
     
-    # Разбираем callback в зависимости от структуры данных
-    if action == "edit_profile" or action == "open_edit_menu" or action == "cancel_desc":
+    if action in ["edit_profile", "open_edit_menu", "cancel_desc"]:
         target_id = int(data_parts[1])
         await open_edit_menu(callback, target_id)
         
@@ -343,7 +347,6 @@ async def handle_profile_callbacks(callback: types.CallbackQuery):
         
     elif action == "back_to_profile":
         target_id = int(data_parts[1])
-        # Возврат к обычному просмотру профиля
         await open_profile(callback, target_id)
 
 # ФУНКЦИЯ СОХРАНЕНИЯ ОПИСАНИЯ В БАЗУ ДАННЫХ
