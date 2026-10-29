@@ -257,24 +257,23 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
 async def handle_group_text_messages(message: types.Message):
     user_id = message.from_user.id
     
-    # Проверяем, находится ли пользователь в состоянии ожидания описания
+    # Проверяем состояние прямо из локального словаря bot.py
     if user_states.get(user_id) == "waiting_description":
         reason_text = message.text
         
-        # Если текст превышает 50 символов — бот его просто игнорирует
+        # Если текст превышает 50 символов — полностью игнорируем
         if len(reason_text) > 50:
             return
             
-        # Если лимит пройден: сбрасываем состояние ожидания
+        # Сбрасываем состояние
         user_states.pop(user_id, None)
         
-        # Удаляем сообщение пользователя, чтобы не засорять чат (опционально)
+        # Пытаемся удалить сообщение пользователя, чтобы не засорять чат
         try:
             await message.delete()
         except Exception:
             pass
             
-        # Вызываем функцию сохранения из menu_profile.py
         import menu_profile
         await menu_profile.save_description_from_text(message, user_id, reason_text)
 
