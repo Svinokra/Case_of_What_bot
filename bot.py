@@ -194,10 +194,10 @@ async def cmd_open_menu(message: types.Message):
 
 @dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("cancel_") | F.data.startswith("open_") | F.data.startswith("back_to_profile"))
 async def handle_menu_clicks(callback: types.CallbackQuery):
-    data_parts = callback.data.split(":")
-    action_data = data_parts[0]
+    data = callback.data
+    data_parts = data.split(":")
     
-    # Извлекаем ID владельца меню (последний элемент)
+    # ID владельца меню всегда идет в самом конце callback_data
     owner_id = int(data_parts[-1])
     
     if callback.from_user.id != owner_id:
@@ -206,25 +206,25 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
 
     await callback.answer()
 
-    # Если клик относится к стандартным меню группы
-    if action_data == "menu_profile":
+    # Проверяем корневые разделы меню
+    if data.startswith("menu_profile"):
         import menu_profile
         await menu_profile.open_profile(callback, owner_id)
-    elif action_data == "menu_shop":
+    elif data.startswith("menu_shop"):
         import menu_shop
         await menu_shop.open_shop(callback)
-    elif action_data == "menu_games":
+    elif data.startswith("menu_games"):
         import menu_games
         await menu_games.open_games(callback)
-    elif action_data == "menu_rating":
+    elif data.startswith("menu_rating"):
         import menu_rating
         await menu_rating.open_rating(callback)
-    elif action_data == "menu_info":
+    elif data.startswith("menu_info"):
         import menu_info
         await menu_info.open_info(callback)
         
-    # ЕСЛИ КЛИК ОТНОСИТСЯ К ИЗМЕНЕНИЮ ПРОФИЛЯ (Отправляем в menu_profile.py)
-    if action_data in ["edit_profile", "open_edit_menu", "cancel_desc", "edit_gender", "set_gender", "edit_desc", "back_to_profile"]:
+    # Проверяем все кнопки, связанные с изменением профиля
+    if data.startswith("edit_") or data.startswith("open_") or data.startswith("set_") or data.startswith("cancel_") or data.startswith("back_to_profile"):
         import menu_profile
         await menu_profile.handle_profile_callbacks(callback)
 
@@ -251,48 +251,48 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
     await callback.message.edit_text(text=menu_text, reply_markup=builder.as_markup())
 
 # СМЕНА ОПИСАНИЯ ЧЕРЕЗ КОМАНДУ ОТВЕТ
-@dp.message(Command("change_description"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
+@dp.message(Command("change_description"), F.chat.id == ALLOWED_GROUP_ID)
 async def cmd_change_description(message: types.Message):
     user_id = message.from_user.id
     
-    # Разбираем callback-данные сообщения, на которое ответили (инструкция бота)
-    if not message.reply_to_message.reply_markup:
+    # 1. Проверяем, что команда написана строго ответом (Reply) на сообщение бота
+    if not message.reply_to_message or not message.reply_to_message.reply_markup:
         return
         
-    # Ищем кнопку "Отмена" в сообщении инструкции, чтобы вытащить ID хозяина профиля
-    # Кнопка отмены имеет вид: cancel_desc:ID_ХОЗЯИНА
+    # 2. Вытаскиваем ID хозяина профиля из инлайн-кнопки сообщения, на которое ответили
     try:
         inline_keyboard = message.reply_to_message.reply_markup.inline_keyboard
-        cancel_button_data = inline_keyboard[0][0].callback_data
-        owner_id_from_msg = int(cancel_button_data.split(":")[-1])
+        # Берем callback_data первой кнопки ("Отмена"), там зашит ID хозяина
+        button_data = inline_keyboard[0][0].callback_data
+        owner_id_from_msg = int(button_data.split(":")[-1])
     except Exception:
         return
 
-    # ЖЕСТКАЯ ПРОВЕРКА: Если команду пишет НЕ тот участник, кому принадлежит профиль
+    # ЖЕСТКАЯ ЗАЩИТА: Если команду пишет посторонний человек, а не хозяин профиля
     if user_id != owner_id_from_msg:
         return
 
-    # Отрезаем команду, берем текст
+    # Отрезаем команду, берем текст описания
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await message.reply("Ошибка: Вы не ввели текст описания!")
+        await message.reply("Вы не ввели текст описания!")
         return
         
     desc_text = args[1].strip()
     
-    # Лимит в 50 символов
+    # Проверка лимита в 50 символов
     if len(desc_text) > 50:
-        await message.reply("Ошибка: Описание не должно превышать 50 символов! Попробуйте снова.")
+        await message.reply("Описание не должно превышать 50 символов! Попробуйте снова")
         return
 
-    # Чистим чат от команды
+    # Чистим чат
     try:
         await message.delete()
         await message.reply_to_message.delete()
     except Exception:
         pass
 
-    # Пишем в Postgres
+    # Запись в Postgres
     import menu_profile
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
