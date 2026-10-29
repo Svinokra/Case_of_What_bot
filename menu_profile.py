@@ -280,10 +280,16 @@ async def handle_profile_callbacks(callback: types.CallbackQuery):
     data_parts = callback.data.split(":")
     action = data_parts[0]
     
-    if action in ["edit_profile", "open_edit_menu", "cancel_desc"]:
+    if action in ["edit_profile", "open_edit_menu"]:
         target_id = int(data_parts[-1])
         from bot import user_states
-        user_states.pop(target_id, None) # На всякий случай чистим стейт при отмене
+        user_states.pop(target_id, None) # Чистим стейт только при выходе в меню изменений
+        await open_edit_menu(callback, target_id)
+        
+    elif action == "cancel_desc":
+        target_id = int(data_parts[-1])
+        from bot import user_states
+        user_states.pop(target_id, None) # Сбрасываем стейт при отмене ввода описания
         await open_edit_menu(callback, target_id)
         
     elif action == "edit_gender":
