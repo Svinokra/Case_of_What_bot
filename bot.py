@@ -255,18 +255,25 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
 async def handle_group_text_messages(message: types.Message):
     user_id = message.from_user.id
     
-    # Жесткая проверка состояния прямо внутри выполнения
+    # Если бот ждет описание от этого пользователя
     if user_states.get(user_id) == "waiting_description":
         reason_text = message.text
         
-        # Если текст длиннее 50 символов — полный игнор (как в ТЗ)
+        # ПРОВЕРКА ЛИМИТА: Если текст длиннее 50 символов
         if len(reason_text) > 50:
+            # Пытаемся удалить слишком длинное сообщение пользователя
+            try:
+                await message.delete()
+            except Exception:
+                pass
+            # Бот четко говорит об ошибке, не сбрасывая ожидание текста
+            await message.answer("Описание не должно превышать 50 символов! Попробуйте снова")
             return
-            
-        # Сразу сбрасываем состояние, чтобы бот не зациклился
+
+        # ЕСЛИ ВСЁ ОК: Сбрасываем состояние ожидания
         user_states.pop(user_id, None)
         
-        # Удаляем сообщение пользователя с текстом
+        # Удаляем сообщение пользователя с нормальным текстом
         try:
             await message.delete()
         except Exception:
@@ -280,6 +287,7 @@ async def handle_group_text_messages(message: types.Message):
             except Exception:
                 pass
 
+        # Сохраняем в базу данных
         import menu_profile
         await menu_profile.save_description_from_text(message, user_id, reason_text)
 
