@@ -251,30 +251,48 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
     await callback.message.edit_text(text=menu_text, reply_markup=builder.as_markup())
 
 # СМЕНА ОПИСАНИЯ ЧЕРЕЗ КОМАНДУ ОТВЕТ
-@dp.message(Command("change_description"), F.chat.id == ALLOWED_GROUP_ID)
+@dp.message(Command("change_description"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
 async def cmd_change_description(message: types.Message):
     user_id = message.from_user.id
     
-    # Отрезаем команду, берём только текст описания
+    # Разбираем callback-данные сообщения, на которое ответили (инструкция бота)
+    if not message.reply_to_message.reply_markup:
+        return
+        
+    # Ищем кнопку "Отмена" в сообщении инструкции, чтобы вытащить ID хозяина профиля
+    # Кнопка отмены имеет вид: cancel_desc:ID_ХОЗЯИНА
+    try:
+        inline_keyboard = message.reply_to_message.reply_markup.inline_keyboard
+        cancel_button_data = inline_keyboard[0][0].callback_data
+        owner_id_from_msg = int(cancel_button_data.split(":")[-1])
+    except Exception:
+        return
+
+    # ЖЕСТКАЯ ПРОВЕРКА: Если команду пишет НЕ тот участник, кому принадлежит профиль
+    if user_id != owner_id_from_msg:
+        return
+
+    # Отрезаем команду, берем текст
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await message.reply("Вы не ввели текст описания!")
+        await message.reply("Ошибка: Вы не ввели текст описания!")
         return
         
     desc_text = args[1].strip()
     
-    # Жесткая проверка лимита
+    # Лимит в 50 символов
     if len(desc_text) > 50:
-        await message.reply("Описание не должно превышать 50 символов Попробуйте снова")
+        await message.reply("Ошибка: Описание не должно превышать 50 символов! Попробуйте снова.")
         return
 
-    # Удаляем сообщение пользователя с командой, чтобы не засорять чат
+    # Чистим чат от команды
     try:
         await message.delete()
+        await message.reply_to_message.delete()
     except Exception:
         pass
 
-    # Сохраняем в базу данных Postgres
+    # Пишем в Postgres
     import menu_profile
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
@@ -285,12 +303,11 @@ async def cmd_change_description(message: types.Message):
         cursor.close()
         conn.close()
 
-    # Формируем кнопку "Хорошо", которая вернет в меню редактирования профиля
+    # Выводим кнопку "Хорошо"
     builder = InlineKeyboardBuilder()
     builder.button(text="Хорошо", callback_data=f"open_edit_menu:{user_id}")
     builder.adjust(1)
 
-    # Бот отвечает сообщением об успехе с кнопкой
     await message.answer(
         text="Описание было успешно изменено", 
         reply_markup=builder.as_markup()
