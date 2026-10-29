@@ -265,10 +265,11 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
         reply_markup=builder.as_markup()
     )
 
+# АБСОЛЮТНО ЧИСТАЯ ФУНКЦИЯ БЕЗ ЦИКЛИЧЕСКИХ ИМПОРТОВ И БЕЗ БОТ-СТЕЙТОВ
 async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     builder = InlineKeyboardBuilder()
-    # Кнопка отмены теперь четко ведет на функцию сброса
-    builder.button(text="Отмена", callback_data=f"cancel_desc:{target_id}")
+    # Кнопка отмены сразу шлет callback на возврат в корневое меню редактирования
+    builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
     builder.adjust(1)
 
     text = (
@@ -279,27 +280,18 @@ async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     )
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup(), parse_mode="Markdown")
 
-# Ваша оригинальная функция отмены, которую мы починили и вернули в логику
+# Ваша оригинальная функция отмены, теперь работает полностью автономно
 async def cancel_description_input(callback: types.CallbackQuery, target_id: int):
     if callback.from_user.id != target_id:
         await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
         return
     await callback.answer()
-    
-    # Безопасно чистим состояние, если оно использовалось
-    try:
-        from bot import user_states
-        user_states.pop(target_id, None)
-    except Exception:
-        pass
-
-    # Возвращаем в меню редактирования
     await open_edit_menu(callback, target_id)
 
-# Полный маршрутизатор callback-запросов
+# Исправленный и прозрачный маршрутизатор
 async def handle_profile_callbacks(callback: types.CallbackQuery):
     data_parts = callback.data.split(":")
-    action_data = data_parts[0]
+    action_data = data_parts
     target_id = int(data_parts[-1])
     
     if action_data in ["edit_profile", "open_edit_menu"]:
@@ -309,14 +301,14 @@ async def handle_profile_callbacks(callback: types.CallbackQuery):
         await open_gender_menu(callback, target_id)
         
     elif action_data == "set_gender":
-        gender_type = data_parts[1]
+        gender_type = data_parts
         await save_gender(callback, gender_type, target_id)
         
     elif action_data == "edit_desc":
+        # Мгновенный вызов изолированной функции
         await open_desc_menu(callback, target_id)
         
     elif action_data == "cancel_desc":
-        # Перенаправляем клик на функцию отмены
         await cancel_description_input(callback, target_id)
         
     elif action_data == "back_to_profile":
