@@ -281,23 +281,36 @@ async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
 async def handle_profile_callbacks(callback: types.CallbackQuery):
     data = callback.data
     data_parts = data.split(":")
+    
+    # ID владельца профиля всегда самый последний элемент в любой из наших кнопок
     target_id = int(data_parts[-1])
     
-    if data.startswith("edit_profile") or data.startswith("open_edit_menu"):
-        await open_edit_menu(callback, target_id)
-        
-    elif data.startswith("edit_gender"):
+    # 1. Кнопка "Описание" (Вызов окна инструкции)
+    if data.startswith("edit_desc:"):
+        await open_desc_menu(callback, target_id)
+        return
+
+    # 2. Кнопка "Пол" (Переход в меню выбора пола)
+    elif data.startswith("edit_gender:"):
         await open_gender_menu(callback, target_id)
-        
-    elif data.startswith("set_gender"):
+        return
+
+    # 3. Кнопки "Мужской" / "Женский" (Сохранение пола)
+    elif data.startswith("set_gender:"):
+        # Безопасно достаем тип пола (male или female), который идет вторым элементом
         gender_type = data_parts[1]
         await save_gender(callback, gender_type, target_id)
+        return
+
+    # 4. Кнопки возврата в меню изменения профиля ("Отмена" или "Хорошо")
+    elif data.startswith("open_edit_menu:") or data.startswith("edit_profile:"):
+        await open_edit_menu(callback, target_id)
+        return
         
-    elif data.startswith("edit_desc"):
-        await open_desc_menu(callback, target_id)
-        
-    elif data.startswith("back_to_profile"):
+    # 5. Кнопка возврата к обычному просмотру профиля ("Назад")
+    elif data.startswith("back_to_profile:"):
         await open_profile(callback, target_id)
+        return
 
 async def save_description_from_text(message: types.Message, target_id: int, new_desc: str):
     conn = get_db_connection()
