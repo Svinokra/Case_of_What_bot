@@ -63,37 +63,36 @@ async def handle_private_messages(message: types.Message):
     user_id = message.from_user.id
     current_state = user_states.get(user_id)
 
-    # Если пользователь находится на шаге ввода причины
     if current_state == "waiting_reason":
-        reason_text = message.text
         user_username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.full_name
         
-        # Ставим ограничение на 2 часа с этого момента
+        # Ставим ограничение на 2 часа и сбрасываем стейт ожидания
         user_cooldowns[user_id] = datetime.now() + timedelta(hours=2)
-        # Сбрасываем состояние
         user_states.pop(user_id, None)
         
-        # Отвечаем пользователю
+        # Отвечаем пользователю в ЛС
         await message.answer("Дождитесь ответа от владельца группы")
         
-        # Формируем сообщение для владельца группы
-        admin_text = (
-            f"Пользователь {user_username} прислал вам такое сообщение: {reason_text}\n\n"
-            f"Принимаете ли вы его? Если да то впишите в свой ответ на его сообщение ссылку приглашения"
-        )
-        
         try:
-            # Бот отправляет сообщение владельцу
-            sent_message = await bot.send_message(chat_id=OWNER_ID, text=admin_text)
-            # Запоминаем ID сообщения, чтобы понять на какую именно заявку ответит админ
-            forwarded_requests[sent_message.message_id] = user_id
+            # 1. Бот ПЕРЕСЫЛАЕТ оригинальное сообщение пользователя владельцу
+            forwarded = await message.forward(chat_id=OWNER_ID)
+            
+            # 2. Бот отправляет владельцу инструкцию вдогонку
+            admin_instruction = (
+                f"Сообщение выше прислал пользователь {user_username}.\n\n"
+                f"Напишите сюда ваш ответ этому пользователю (ответ на пересланное сообщение)\n"
+                f"И не забудьте вставить ссылку приглашения в группу!"
+            )
+            await bot.send_message(chat_id=OWNER_ID, text=admin_instruction)
+            
+            # Связываем ID пересланного сообщения с ID пользователя для Reply-ответа
+            forwarded_requests[forwarded.message_id] = user_id
+            
         except Exception as e:
-            logging.error(f"Не удалось отправить сообщение владельцу: {e}")
+            logging.error(f"Не удалось переслать сообщение владельцу: {e}")
             
     else:
-        # Если это любое другое сообщение или спам вне контекста команды
         await message.answer("Введите команду /I_want_group если хотите написать владельцу группы")
-
 
 # Хэндлер для владельца: обработка ответа (Reply) на заявку
 @dp.message(F.chat.type == "private", F.reply_to_message)
@@ -256,26 +255,28 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
 async def handle_group_text_messages(message: types.Message):
     user_id = message.from_user.id
     
+    # Жесткая проверка состояния прямо внутри выполнения
     if user_states.get(user_id) == "waiting_description":
         reason_text = message.text
         
-        # Если текст длиннее 50 символов — полный игнор
+        # Если текст длиннее 50 символов — полный игнор (как в ТЗ)
         if len(reason_text) > 50:
             return
             
-        # Сбрасываем состояние ожидания
+        # Сразу сбрасываем состояние, чтобы бот не зациклился
         user_states.pop(user_id, None)
         
-        # Удаляем сообщение с текстом пользователя
+        # Удаляем сообщение пользователя с текстом
         try:
             await message.delete()
         except Exception:
             pass
             
-        # Удаляем старое сообщение интерфейса "Ответьте на это сообщение..."
+        # Удаляем сообщение интерфейса бота "Ответьте на это сообщение..."
         if user_id in user_menus:
             try:
                 await bot.delete_message(chat_id=message.chat.id, message_id=user_menus[user_id])
+                user_menus.pop(user_id, None)
             except Exception:
                 pass
 
