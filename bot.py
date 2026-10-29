@@ -250,46 +250,51 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
     
     await callback.message.edit_text(text=menu_text, reply_markup=builder.as_markup())
 
-# Хэндлер для перехвата текста описания профиля в группе
-@dp.message(F.chat.id == ALLOWED_GROUP_ID)
-async def handle_group_text_messages(message: types.Message):
+# СМЕНА ОПИСАНИЯ ЧЕРЕЗ КОМАНДУ ОТВЕТ
+@dp.message(Command("change_description"), F.chat.id == ALLOWED_GROUP_ID)
+async def cmd_change_description(message: types.Message):
     user_id = message.from_user.id
     
-    # Если бот ждет описание от этого пользователя
-    if user_states.get(user_id) == "waiting_description":
-        reason_text = message.text
+    # Отрезаем команду, берём только текст описания
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.reply("Вы не ввели текст описания!")
+        return
         
-        # ПРОВЕРКА ЛИМИТА: Если текст длиннее 50 символов
-        if len(reason_text) > 50:
-            # Пытаемся удалить слишком длинное сообщение пользователя
-            try:
-                await message.delete()
-            except Exception:
-                pass
-            # Бот четко говорит об ошибке, не сбрасывая ожидание текста
-            await message.answer("Описание не должно превышать 50 символов! Попробуйте снова")
-            return
+    desc_text = args[1].strip()
+    
+    # Жесткая проверка лимита
+    if len(desc_text) > 50:
+        await message.reply("Описание не должно превышать 50 символов Попробуйте снова")
+        return
 
-        # ЕСЛИ ВСЁ ОК: Сбрасываем состояние ожидания
-        user_states.pop(user_id, None)
-        
-        # Удаляем сообщение пользователя с нормальным текстом
-        try:
-            await message.delete()
-        except Exception:
-            pass
-            
-        # Удаляем сообщение интерфейса бота "Ответьте на это сообщение..."
-        if user_id in user_menus:
-            try:
-                await bot.delete_message(chat_id=message.chat.id, message_id=user_menus[user_id])
-                user_menus.pop(user_id, None)
-            except Exception:
-                pass
+    # Удаляем сообщение пользователя с командой, чтобы не засорять чат
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
-        # Сохраняем в базу данных
-        import menu_profile
-        await menu_profile.save_description_from_text(message, user_id, reason_text)
+    # Сохраняем в базу данных Postgres
+    import menu_profile
+    conn = menu_profile.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE user_profiles SET description = %s WHERE user_id = %s", (desc_text, user_id))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+    # Формируем кнопку "Хорошо", которая вернет в меню редактирования профиля
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Хорошо", callback_data=f"open_edit_menu:{user_id}")
+    builder.adjust(1)
+
+    # Бот отвечает сообщением об успехе с кнопкой
+    await message.answer(
+        text="Описание было успешно изменено", 
+        reply_markup=builder.as_markup()
+    )
 
 # ВЕБ-СЕРВЕР И AIOHTTP
 async def handle_ping(request):
