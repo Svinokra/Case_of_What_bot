@@ -152,71 +152,6 @@ async def show_profile_by_username(message: types.Message, username_arg: str, bo
         cursor.close()
         conn.close()
 
-# 1. ПЕРЕХОД В РАЗДЕЛ ИЗМЕНЕНИЯ ПРОФИЛЯ
-async def open_edit_menu(callback: types.CallbackQuery, target_id: int):
-    # Проверка прав: менять профиль может только его владелец
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-    
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Описание", callback_data=f"edit_desc:{target_id}")
-    builder.button(text="Пол", callback_data=f"edit_gender:{target_id}")
-    builder.button(text="Назад", callback_data=f"back_to_profile:{target_id}")
-    builder.adjust(2, 1)
-
-    text = "Раздел: Изменение профиля\n\nЧто вы хотите изменить в своём профиле?"
-    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
-
-
-# 2. РАЗДЕЛ: ВЫБОР ПОЛА
-async def open_gender_menu(callback: types.CallbackQuery, target_id: int):
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Мужской", callback_data=f"set_gender:male:{target_id}")
-    builder.button(text="Женский", callback_data=f"set_gender:female:{target_id}")
-    builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
-    builder.adjust(2, 1)
-
-    text = "Раздел: Выбор пола\n\nУкажите ваш пол:"
-    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
-
-
-# 3. СОХРАНЕНИЕ ПОЛА В БАЗУ ДАННЫХ
-async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id: int):
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-    gender_value = "Мужской" if gender_type == "male" else "Женский"
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("UPDATE user_profiles SET gender = %s WHERE user_id = %s", (gender_value, target_id))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
-    # Кнопка "Хорошо" возвращает по чистому префиксу open_edit_menu
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Хорошо", callback_data=f"open_edit_menu:{target_id}")
-    builder.adjust(1)
-
-    await callback.message.edit_text(
-        text="Этот пол был успешно указан в вашем профиле", 
-        reply_markup=builder.as_markup()
-    )
-
 # ЛОГИКА ИЗМЕНЕНИЯ РЕПУТАЦИИ
 async def handle_reputation_change(message: types.Message):
     target_user = message.reply_to_message.from_user
@@ -259,42 +194,6 @@ async def handle_reputation_change(message: types.Message):
         cursor.close()
         conn.close()
 
-# 4. РАЗДЕЛ: ИЗМЕНЕНИЕ ОПИСАНИЯ (ВКЛЮЧЕНИЕ ОЖИДАНИЯ ТЕКСТА)
-async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-
-    # Импортируем словарь состояний из главного файла бота
-    from bot import user_states
-    # Переводим пользователя в состояние ожидания ввода текста описания
-    user_states[target_id] = "waiting_description"
-
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Отмена", callback_data=f"cancel_desc:{target_id}")
-
-    text = "Раздел: Изменение описания\n\nОтветьте на это сообщение текстом в котором не превышается лимит в 50 символов"
-    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
-
-
-# 5. ОТМЕНА ВВОДА ОПИСАНИЯ
-async def cancel_description_input(callback: types.CallbackQuery, target_id: int):
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-    
-    from bot import user_states
-    # Сбрасываем состояние ожидания, если нажата "Отмена"
-    user_states.pop(target_id, None)
-
-    # Возвращаем пользователя в меню редактирования профиля
-    await open_edit_menu(callback, target_id)
-
-
 # ЛОГИКА ЗАМЕТОК (ТОЛЬКО ДЛЯ СОЗДАТЕЛЯ БОТА)
 async def handle_note_management(message: types.Message):
     if message.from_user.id != CREATOR_BOT_ID:
@@ -324,33 +223,86 @@ async def handle_note_management(message: types.Message):
         cursor.close()
         conn.close()
 
-# 6. ОБЩИЙ ОБРАБОТЧИК ДЛЯ ВСЕХ КНОПОК РЕДАКТИРОВАНИЯ ПРОФИЛЯ
+# 1. ПЕРЕХОД В РАЗДЕЛ ИЗМЕНЕНИЯ ПРОФИЛЯ
+async def open_edit_menu(callback: types.CallbackQuery, target_id: int):
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Описание", callback_data=f"edit_desc:{target_id}")
+    builder.button(text="Пол", callback_data=f"edit_gender:{target_id}")
+    builder.button(text="Назад", callback_data=f"back_to_profile:{target_id}")
+    builder.adjust(2, 1)
+
+    text = "Раздел: Изменение профиля\n\nЧто вы хотите изменить в своём профиле?"
+    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+
+async def open_gender_menu(callback: types.CallbackQuery, target_id: int):
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Мужской", callback_data=f"set_gender:male:{target_id}")
+    builder.button(text="Женский", callback_data=f"set_gender:female:{target_id}")
+    builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
+    builder.adjust(2, 1)
+
+    text = "Раздел: Выбор пола\n\nУкажите ваш пол:"
+    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+
+async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id: int):
+    gender_value = "Мужской" if gender_type == "male" else "Женский"
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE user_profiles SET gender = %s WHERE user_id = %s", (gender_value, target_id))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Хорошо", callback_data=f"open_edit_menu:{target_id}")
+    builder.adjust(1)
+
+    await callback.message.edit_text(
+        text="Этот пол был успешно указан в вашем профиле", 
+        reply_markup=builder.as_markup()
+    )
+
+async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
+    from bot import user_states, user_menus
+    user_states[target_id] = "waiting_description"
+    # Запоминаем ID сообщения интерфейса, чтобы bot.py мог его снести
+    user_menus[target_id] = callback.message.message_id
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Отмена", callback_data=f"cancel_desc:{target_id}")
+
+    text = "Раздел: Изменение описания\n\nОтветьте на это сообщение текстом в котором не превышается лимит в 50 символов"
+    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+    
 async def handle_profile_callbacks(callback: types.CallbackQuery):
     data_parts = callback.data.split(":")
-    action = data_parts[0]  # Исправлено: берем строго первый элемент действия
+    action = data_parts[0]
     
     if action in ["edit_profile", "open_edit_menu", "cancel_desc"]:
-        target_id = int(data_parts[1])
+        target_id = int(data_parts[-1])
+        from bot import user_states
+        user_states.pop(target_id, None) # На всякий случай чистим стейт при отмене
         await open_edit_menu(callback, target_id)
         
     elif action == "edit_gender":
-        target_id = int(data_parts[1])
+        target_id = int(data_parts[-1])
         await open_gender_menu(callback, target_id)
         
     elif action == "set_gender":
         gender_type = data_parts[1]
-        target_id = int(data_parts[2])
+        target_id = int(data_parts[-1])
         await save_gender(callback, gender_type, target_id)
         
     elif action == "edit_desc":
-        target_id = int(data_parts[1])
+        target_id = int(data_parts[-1])
         await open_desc_menu(callback, target_id)
         
     elif action == "back_to_profile":
-        target_id = int(data_parts[1])
+        target_id = int(data_parts[-1])
         await open_profile(callback, target_id)
 
-# ФУНКЦИЯ СОХРАНЕНИЯ ОПИСАНИЯ В БАЗУ ДАННЫХ
 async def save_description_from_text(message: types.Message, target_id: int, new_desc: str):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -361,5 +313,19 @@ async def save_description_from_text(message: types.Message, target_id: int, new
         cursor.close()
         conn.close()
         
-    # Бот уведомляет об успехе, как вы просили в ТЗ
     await message.answer("Описание было успешно изменено")
+
+# 5. ОТМЕНА ВВОДА ОПИСАНИЯ
+async def cancel_description_input(callback: types.CallbackQuery, target_id: int):
+    if callback.from_user.id != target_id:
+        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
+        return
+
+    await callback.answer()
+    
+    from bot import user_states
+    # Сбрасываем состояние ожидания, если нажата "Отмена"
+    user_states.pop(target_id, None)
+
+    # Возвращаем пользователя в меню редактирования профиля
+    await open_edit_menu(callback, target_id)
