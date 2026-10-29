@@ -287,28 +287,32 @@ async def cancel_description_input(callback: types.CallbackQuery, target_id: int
 
 # Окончательный роутер с фиксом индексов разделения строк
 async def handle_profile_callbacks(callback: types.CallbackQuery):
-    data_parts = callback.data.split(":")
-    action_data = data_parts[0]
-    target_id = int(data_parts[-1])
+    # Просто берем текст, который зашит в кнопку
+    cb_data = callback.data
     
-    if action_data in ["edit_profile", "open_edit_menu"]:
-        await open_edit_menu(callback, target_id)
-        
-    elif action_data == "edit_gender":
-        await open_gender_menu(callback, target_id)
-        
-    elif action_data == "set_gender":
-        # Безопасно забираем тип из центра (индекс 1) строки типа set_gender:male:ID
-        gender_type = data_parts[1]
-        await save_gender(callback, gender_type, target_id)
-        
-    elif action_data == "edit_desc":
+    # Безопасно достаем Telegram ID (он всегда идет в самом конце после последнего двоеточия)
+    target_id = int(cb_data.split(":")[-1])
+    
+    # 1. Если нажали кнопку "Описание" (Вызов инструкции)
+    if cb_data.startswith("edit_desc"):
         await open_desc_menu(callback, target_id)
         
-    elif action_data == "cancel_desc":
-        await cancel_description_input(callback, target_id)
+    # 2. Если нажали кнопку "Пол" (Переход в меню выбора пола)
+    elif cb_data.startswith("edit_gender"):
+        await open_gender_menu(callback, target_id)
         
-    elif action_data == "back_to_profile":
+    # 3. Если выбрали сам Пол (Мужской или Женский)
+    elif cb_data.startswith("set_gender"):
+        # Достаем male или female из середины строки
+        gender_type = cb_data.split(":")[1]
+        await save_gender(callback, gender_type, target_id)
+        
+    # 4. Если нажали "Отмена" или "Хорошо" (Возврат в меню изменений)
+    elif cb_data.startswith("open_edit_menu") or cb_data.startswith("edit_profile"):
+        await open_edit_menu(callback, target_id)
+        
+    # 5. Если нажали кнопку "Назад" (Возврат к просмотру своего профиля)
+    elif cb_data.startswith("back_to_profile"):
         await open_profile(callback, target_id)
 
 async def save_description_from_text(message: types.Message, target_id: int, new_desc: str):
