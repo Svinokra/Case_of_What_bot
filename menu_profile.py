@@ -284,28 +284,28 @@ async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup(), parse_mode="Markdown")
     
 async def handle_profile_callbacks(callback: types.CallbackQuery):
-    data_parts = callback.data.split(":")
-    action = data_parts[0]
+    data = callback.data
+    data_parts = data.split(":")
     
-    if action in ["edit_profile", "open_edit_menu", "cancel_desc"]:
-        target_id = int(data_parts[-1])
+    # Защита: проверяем ID владельца меню (он всегда последний в строке)
+    target_id = int(data_parts[-1])
+    
+    # Четко проверяем, с какого префикса начинается callback
+    if data.startswith("edit_profile") or data.startswith("open_edit_menu") or data.startswith("cancel_desc"):
         await open_edit_menu(callback, target_id)
         
-    elif action == "edit_gender":
-        target_id = int(data_parts[-1])
+    elif data.startswith("edit_gender"):
         await open_gender_menu(callback, target_id)
         
-    elif action == "set_gender":
+    elif data.startswith("set_gender"):
         gender_type = data_parts[1]
-        target_id = int(data_parts[-1])
         await save_gender(callback, gender_type, target_id)
         
-    elif action == "edit_desc":
-        target_id = int(data_parts[-1])
+    elif data.startswith("edit_desc"):
+        # ВОТ ЗДЕСЬ ТЕПЕРЬ НАПРЯМУЮ ВЫЗЫВАЕТСЯ ЭКРАН ИНСТРУКЦИИ ОПИСАНИЯ!
         await open_desc_menu(callback, target_id)
         
-    elif action == "back_to_profile":
-        target_id = int(data_parts[-1])
+    elif data.startswith("back_to_profile"):
         await open_profile(callback, target_id)
 
 async def save_description_from_text(message: types.Message, target_id: int, new_desc: str):
