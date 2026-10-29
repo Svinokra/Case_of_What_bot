@@ -266,32 +266,24 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
     )
 
 async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-
     builder = InlineKeyboardBuilder()
-    builder.button(text="Отмена", callback_data=f"cancel_desc:{target_id}")
+    builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
 
     text = (
         "Раздел: Изменение описания\n\n"
         "Ответьте на это сообщение так:\n"
-        "/change_description Моё описание (этот текст пример)\n\n"
+        "/change_description Моё описание (это пример)\n\n"
         "Не превышайте лимит в 50 символов!"
     )
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup(), parse_mode="Markdown")
-    
+
+# Общий обработчик кнопок изменения профиля
 async def handle_profile_callbacks(callback: types.CallbackQuery):
     data = callback.data
     data_parts = data.split(":")
-    
-    # Защита: проверяем ID владельца меню (он всегда последний в строке)
     target_id = int(data_parts[-1])
     
-    # Четко проверяем, с какого префикса начинается callback
-    if data.startswith("edit_profile") or data.startswith("open_edit_menu") or data.startswith("cancel_desc"):
+    if data.startswith("edit_profile") or data.startswith("open_edit_menu"):
         await open_edit_menu(callback, target_id)
         
     elif data.startswith("edit_gender"):
@@ -302,7 +294,6 @@ async def handle_profile_callbacks(callback: types.CallbackQuery):
         await save_gender(callback, gender_type, target_id)
         
     elif data.startswith("edit_desc"):
-        # ВОТ ЗДЕСЬ ТЕПЕРЬ НАПРЯМУЮ ВЫЗЫВАЕТСЯ ЭКРАН ИНСТРУКЦИИ ОПИСАНИЯ!
         await open_desc_menu(callback, target_id)
         
     elif data.startswith("back_to_profile"):
