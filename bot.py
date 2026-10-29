@@ -4,6 +4,9 @@ import os
 import aiohttp
 import json
 import re
+import urllib.parse
+import pg8000
+import menu_profile
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -120,6 +123,40 @@ async def handle_admin_reply(message: types.Message):
             await message.answer("Не удалось доставить сообщение пользователю (возможно он заблокировал бота)")
             logging.error(f"Ошибка отправки ответа пользователю: {e}")
 
+# ЛОГИКА ПРОФИЛЕЙ
+@dp.message(Command("view_profile"), F.chat.id == ALLOWED_GROUP_ID)
+async def cmd_view_profile(message: types.Message):
+    import menu_profile
+    
+    # 1. Вариант через Reply
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+        
+        # ЗАЩИТА: Если это бот, то профиль не создаем и не показываем
+        if target_user.is_bot:
+            return
+            
+        await menu_profile.show_profile_by_reply(message, target_user, bot)
+        return
+        
+    # 2. Вариант через @username
+    args = message.text.split(maxsplit=1)
+    if len(args) > 1:
+        username_arg = args[1].strip().replace("@", "")
+        await menu_profile.show_profile_by_username(message, username_arg, bot)
+
+# Команды изменения репутации (только по реплаю в группе)
+@dp.message(Command("plus_rep", "minus_rep"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
+async def cmd_change_reputation(message: types.Message):
+    import menu_profile
+    await menu_profile.handle_reputation_change(message)
+
+# Команды управления заметками от Создателя бота (только по реплаю в группе)
+@dp.message(Command("give_note", "delete_note"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
+async def cmd_manage_notes(message: types.Message):
+    import menu_profile
+    await menu_profile.handle_note_management(message)
+
 # ЛОГИКА ДЛЯ ГРУППЫ (МЕНЮ)
 @dp.message(Command("open_menu"), F.chat.id == ALLOWED_GROUP_ID)
 async def cmd_open_menu(message: types.Message):
@@ -159,23 +196,18 @@ async def cmd_open_menu(message: types.Message):
 
 @dp.callback_query(F.data.startswith("menu_"))
 async def handle_menu_clicks(callback: types.CallbackQuery):
-    # Разделяем callback_data на действие и ID владельца меню
     action_data, owner_id_str = callback.data.split(":")
     owner_id = int(owner_id_str)
     
-    # Проверяем, принадлежит ли меню тому, кто нажал на кнопку
     if callback.from_user.id != owner_id:
-        # Показываем всплывающую ошибку "Это меню принадлежит другому пользователю"
         await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
         return
 
-    # Если нажал владелец, гасим часики анимации нажатия на кнопке (без всплывающих окон)
     await callback.answer()
 
-    # Ниже идет перенаправление в новые файлы-модули
     if action_data == "menu_profile":
         import menu_profile
-        await menu_profile.open_profile(callback)
+        await menu_profile.open_profile(callback, owner_id) # Передаем id владельца меню, чтобы проверить права
     elif action_data == "menu_shop":
         import menu_shop
         await menu_shop.open_shop(callback)
@@ -189,8 +221,55 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import menu_info
         await menu_info.open_info(callback)
 
-# ВЕБ-СЕРВЕР И AIOHTTP
+@dp.callback_query(F.data.startswith("back_to_menu:"))
+async def handle_back_to_menu(callback: types.CallbackQuery):
+    owner_id = int(callback.data.split(":")[1])
+    if callback.from_user.id != owner_id:
+        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
+        return
+        
+    await callback.answer()
+    user_name = callback.from_user.first_name
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Профиль", callback_data=f"menu_profile:{owner_id}")
+    builder.button(text="Магазин", callback_data=f"menu_shop:{owner_id}")
+    builder.button(text="Развлечения", callback_data=f"menu_games:{owner_id}")
+    builder.button(text="Рейтинг", callback_data=f"menu_rating:{owner_id}")
+    builder.button(text="Информация", callback_data=f"menu_info:{owner_id}")
+    builder.adjust(2, 2, 1)
+    
+    menu_text = f"-- Для {user_name} --\nГлавное меню:"
+    
+    await callback.message.edit_text(text=menu_text, reply_markup=builder.as_markup())
 
+# Хэндлер для перехвата текста описания профиля в группе
+@dp.message(F.chat.id == ALLOWED_GROUP_ID)
+async def handle_group_text_messages(message: types.Message):
+    user_id = message.from_user.id
+    
+    # Проверяем, находится ли пользователь в состоянии ожидания описания
+    if user_states.get(user_id) == "waiting_description":
+        reason_text = message.text
+        
+        # Если текст превышает 50 символов — бот его просто игнорирует
+        if len(reason_text) > 50:
+            return
+            
+        # Если лимит пройден: сбрасываем состояние ожидания
+        user_states.pop(user_id, None)
+        
+        # Удаляем сообщение пользователя, чтобы не засорять чат (опционально)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+            
+        # Вызываем функцию сохранения из menu_profile.py
+        import menu_profile
+        await menu_profile.save_description_from_text(message, user_id, reason_text)
+
+# ВЕБ-СЕРВЕР И AIOHTTP
 async def handle_ping(request):
     return web.Response(text="Бот активен и работает!")
 
