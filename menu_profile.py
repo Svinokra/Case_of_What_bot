@@ -265,31 +265,29 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
     )
 
 async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
-    from bot import user_states, user_menus
-    user_states[target_id] = "waiting_description"
-    # Запоминаем ID сообщения интерфейса, чтобы bot.py мог его снести
-    user_menus[target_id] = callback.message.message_id
+    if callback.from_user.id != target_id:
+        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
+        return
+
+    await callback.answer()
 
     builder = InlineKeyboardBuilder()
     builder.button(text="Отмена", callback_data=f"cancel_desc:{target_id}")
 
-    text = "Раздел: Изменение описания\n\nОтветьте на это сообщение текстом в котором не превышается лимит в 50 символов"
-    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+    text = (
+        "Раздел: Изменение описания\n\n"
+        "Ответьте на это сообщение так:\n"
+        "/change_description Моё описание (этот текст пример)\n\n"
+        "Не превышайте лимит в 50 символов!"
+    )
+    await callback.message.edit_text(text=text, reply_markup=builder.as_markup(), parse_mode="Markdown")
     
 async def handle_profile_callbacks(callback: types.CallbackQuery):
     data_parts = callback.data.split(":")
     action = data_parts[0]
     
-    if action in ["edit_profile", "open_edit_menu"]:
+    if action in ["edit_profile", "open_edit_menu", "cancel_desc"]:
         target_id = int(data_parts[-1])
-        from bot import user_states
-        user_states.pop(target_id, None) # Чистим стейт только при выходе в меню изменений
-        await open_edit_menu(callback, target_id)
-        
-    elif action == "cancel_desc":
-        target_id = int(data_parts[-1])
-        from bot import user_states
-        user_states.pop(target_id, None) # Сбрасываем стейт при отмене ввода описания
         await open_edit_menu(callback, target_id)
         
     elif action == "edit_gender":
