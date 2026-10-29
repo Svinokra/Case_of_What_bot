@@ -267,7 +267,9 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
 
 async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     builder = InlineKeyboardBuilder()
-    builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
+    # Кнопка отмены теперь четко ведет на функцию сброса
+    builder.button(text="Отмена", callback_data=f"cancel_desc:{target_id}")
+    builder.adjust(1)
 
     text = (
         "Раздел: Изменение описания\n\n"
@@ -277,40 +279,48 @@ async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     )
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup(), parse_mode="Markdown")
 
-# Общий обработчик кнопок изменения профиля
-async def handle_profile_callbacks(callback: types.CallbackQuery):
-    data = callback.data
-    data_parts = data.split(":")
+# Ваша оригинальная функция отмены, которую мы починили и вернули в логику
+async def cancel_description_input(callback: types.CallbackQuery, target_id: int):
+    if callback.from_user.id != target_id:
+        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
+        return
+    await callback.answer()
     
-    # ID владельца профиля всегда самый последний элемент в любой из наших кнопок
+    # Безопасно чистим состояние, если оно использовалось
+    try:
+        from bot import user_states
+        user_states.pop(target_id, None)
+    except Exception:
+        pass
+
+    # Возвращаем в меню редактирования
+    await open_edit_menu(callback, target_id)
+
+# Полный маршрутизатор callback-запросов
+async def handle_profile_callbacks(callback: types.CallbackQuery):
+    data_parts = callback.data.split(":")
+    action_data = data_parts[0]
     target_id = int(data_parts[-1])
     
-    # 1. Кнопка "Описание" (Вызов окна инструкции)
-    if data.startswith("edit_desc:"):
-        await open_desc_menu(callback, target_id)
-        return
-
-    # 2. Кнопка "Пол" (Переход в меню выбора пола)
-    elif data.startswith("edit_gender:"):
+    if action_data in ["edit_profile", "open_edit_menu"]:
+        await open_edit_menu(callback, target_id)
+        
+    elif action_data == "edit_gender":
         await open_gender_menu(callback, target_id)
-        return
-
-    # 3. Кнопки "Мужской" / "Женский" (Сохранение пола)
-    elif data.startswith("set_gender:"):
-        # Безопасно достаем тип пола (male или female), который идет вторым элементом
+        
+    elif action_data == "set_gender":
         gender_type = data_parts[1]
         await save_gender(callback, gender_type, target_id)
-        return
-
-    # 4. Кнопки возврата в меню изменения профиля ("Отмена" или "Хорошо")
-    elif data.startswith("open_edit_menu:") or data.startswith("edit_profile:"):
-        await open_edit_menu(callback, target_id)
-        return
         
-    # 5. Кнопка возврата к обычному просмотру профиля ("Назад")
-    elif data.startswith("back_to_profile:"):
+    elif action_data == "edit_desc":
+        await open_desc_menu(callback, target_id)
+        
+    elif action_data == "cancel_desc":
+        # Перенаправляем клик на функцию отмены
+        await cancel_description_input(callback, target_id)
+        
+    elif action_data == "back_to_profile":
         await open_profile(callback, target_id)
-        return
 
 async def save_description_from_text(message: types.Message, target_id: int, new_desc: str):
     conn = get_db_connection()
@@ -322,19 +332,11 @@ async def save_description_from_text(message: types.Message, target_id: int, new
         cursor.close()
         conn.close()
         
-    await message.answer("Описание было успешно изменено")
-
-# 5. ОТМЕНА ВВОДА ОПИСАНИЯ
-async def cancel_description_input(callback: types.CallbackQuery, target_id: int):
-    if callback.from_user.id != target_id:
-        await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
-        return
-
-    await callback.answer()
-    
-    from bot import user_states
-    # Сбрасываем состояние ожидания, если нажата "Отмена"
-    user_states.pop(target_id, None)
-
-    # Возвращаем пользователя в меню редактирования профиля
-    await open_edit_menu(callback, target_id)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Хорошо", callback_data=f"open_edit_menu:{target_id}")
+    builder.adjust(1)
+        
+    await message.answer(
+        text="Описание было успешно изменено", 
+        reply_markup=builder.as_markup()
+    )
