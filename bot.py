@@ -18,7 +18,7 @@ TOKEN = "8553478446:AAGz3WNx7PF3NozPVNjV-4NWfnwNOp9aBlY"
 ALLOWED_GROUP_ID = -1002019929433  # ID вашей группы (должен быть числом, обычно начинается с -100)
 OWNER_ID = 5374445721              # Telegram ID владельца (число), которому бот будет слать заявки
 OWNER_USERNAME = "@SlavaUmni"      # Юзернейм владельца для текста (опционально)
-RENDER_URL = "https://onrender.com" 
+RENDER_URL = "https://case_of_what_bot.onrender.com" 
 
 # ИНИЦИАЛИЗАЦИЯ БОТА И ДИСПЕТЧЕРА
 logging.basicConfig(level=logging.INFO)
