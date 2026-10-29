@@ -193,14 +193,12 @@ async def cmd_open_menu(message: types.Message):
     # Сохраняем ID нового меню в память
     user_menus[user_id] = sent_menu.message_id
 
-
-@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("cancel_") | F.data.startswith("back_to_profile"))
+@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("cancel_") | F.data.startswith("open_") | F.data.startswith("back_to_profile"))
 async def handle_menu_clicks(callback: types.CallbackQuery):
-    # ИСПРАВЛЕНО: Безопасное разделение строки. Берем только первый элемент как действие, остальное не ломает код
     data_parts = callback.data.split(":")
     action_data = data_parts[0]
     
-    # Извлекаем ID владельца меню (он всегда идет самым последним элементом в callback_data)
+    # Извлекаем ID владельца меню (последний элемент)
     owner_id = int(data_parts[-1])
     
     if callback.from_user.id != owner_id:
@@ -209,6 +207,7 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
 
     await callback.answer()
 
+    # Если клик относится к стандартным меню группы
     if action_data == "menu_profile":
         import menu_profile
         await menu_profile.open_profile(callback, owner_id)
@@ -225,7 +224,7 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import menu_info
         await menu_info.open_info(callback)
         
-    # Добавляем перехват кнопок изменения в основной роутер
+    # ЕСЛИ КЛИК ОТНОСИТСЯ К ИЗМЕНЕНИЮ ПРОФИЛЯ (Отправляем в menu_profile.py)
     if action_data in ["edit_profile", "open_edit_menu", "cancel_desc", "edit_gender", "set_gender", "edit_desc", "back_to_profile"]:
         import menu_profile
         await menu_profile.handle_profile_callbacks(callback)
@@ -257,23 +256,29 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
 async def handle_group_text_messages(message: types.Message):
     user_id = message.from_user.id
     
-    # Проверяем состояние прямо из локального словаря bot.py
     if user_states.get(user_id) == "waiting_description":
         reason_text = message.text
         
-        # Если текст превышает 50 символов — полностью игнорируем
+        # Если текст длиннее 50 символов — полный игнор
         if len(reason_text) > 50:
             return
             
-        # Сбрасываем состояние
+        # Сбрасываем состояние ожидания
         user_states.pop(user_id, None)
         
-        # Пытаемся удалить сообщение пользователя, чтобы не засорять чат
+        # Удаляем сообщение с текстом пользователя
         try:
             await message.delete()
         except Exception:
             pass
             
+        # Удаляем старое сообщение интерфейса "Ответьте на это сообщение..."
+        if user_id in user_menus:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=user_menus[user_id])
+            except Exception:
+                pass
+
         import menu_profile
         await menu_profile.save_description_from_text(message, user_id, reason_text)
 
