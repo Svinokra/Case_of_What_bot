@@ -192,12 +192,12 @@ async def cmd_open_menu(message: types.Message):
     # Сохраняем ID нового меню в память
     user_menus[user_id] = sent_menu.message_id
 
-@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("cancel_") | F.data.startswith("open_") | F.data.startswith("back_to_profile"))
+@dp.callback_query(F.data.startswith("menu_") | F.data.startswith("edit_") | F.data.startswith("set_") | F.data.startswith("open_") | F.data.startswith("back_to_profile"))
 async def handle_menu_clicks(callback: types.CallbackQuery):
-    data = callback.data
-    data_parts = data.split(":")
+    data_parts = callback.data.split(":")
+    action_data = data_parts[0]
     
-    # ID владельца меню всегда идет в самом конце callback_data
+    # Извлекаем ID владельца меню (последний элемент в строке)
     owner_id = int(data_parts[-1])
     
     if callback.from_user.id != owner_id:
@@ -206,25 +206,24 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
 
     await callback.answer()
 
-    # Проверяем корневые разделы меню
-    if data.startswith("menu_profile"):
+    if action_data == "menu_profile":
         import menu_profile
         await menu_profile.open_profile(callback, owner_id)
-    elif data.startswith("menu_shop"):
+    elif action_data == "menu_shop":
         import menu_shop
         await menu_shop.open_shop(callback)
-    elif data.startswith("menu_games"):
+    elif action_data == "menu_games":
         import menu_games
         await menu_games.open_games(callback)
-    elif data.startswith("menu_rating"):
+    elif action_data == "menu_rating":
         import menu_rating
         await menu_rating.open_rating(callback)
-    elif data.startswith("menu_info"):
+    elif action_data == "menu_info":
         import menu_info
         await menu_info.open_info(callback)
         
-    # Проверяем все кнопки, связанные с изменением профиля
-    if data.startswith("edit_") or data.startswith("open_") or data.startswith("set_") or data.startswith("cancel_") or data.startswith("back_to_profile"):
+    # Передаем управление в menu_profile.py для обработки подменю изменений
+    if action_data in ["edit_profile", "open_edit_menu", "edit_gender", "set_gender", "edit_desc", "back_to_profile"]:
         import menu_profile
         await menu_profile.handle_profile_callbacks(callback)
 
