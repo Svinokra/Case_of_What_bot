@@ -207,9 +207,10 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
         cursor.close()
         conn.close()
 
-    # Кнопка "Хорошо" для возврата в меню изменения
+    # Кнопка "Хорошо" возвращает по чистому префиксу open_edit_menu
     builder = InlineKeyboardBuilder()
     builder.button(text="Хорошо", callback_data=f"open_edit_menu:{target_id}")
+    builder.adjust(1)
 
     await callback.message.edit_text(
         text="Этот пол был успешно указан в вашем профиле", 
@@ -326,7 +327,7 @@ async def handle_note_management(message: types.Message):
 # 6. ОБЩИЙ ОБРАБОТЧИК ДЛЯ ВСЕХ КНОПОК РЕДАКТИРОВАНИЯ ПРОФИЛЯ
 async def handle_profile_callbacks(callback: types.CallbackQuery):
     data_parts = callback.data.split(":")
-    action = data_parts[0]
+    action = data_parts[0]  # Исправлено: берем строго первый элемент действия
     
     if action in ["edit_profile", "open_edit_menu", "cancel_desc"]:
         target_id = int(data_parts[1])
