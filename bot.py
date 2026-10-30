@@ -272,44 +272,43 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
 async def cmd_change_description(message: types.Message):
     user_id = message.from_user.id
     
-    # 1. Проверяем, что команда написана строго ответом (Reply) на сообщение бота
+    # 1. Проверяем, что ответили (Reply) на сообщение инструкции бота
     if not message.reply_to_message or not message.reply_to_message.reply_markup:
         return
         
-    # 2. Вытаскиваем ID хозяина профиля из инлайн-кнопки сообщения, на которое ответили
+    # 2. Вытаскиваем ID хозяина профиля из инлайн-кнопки "Отмена"
     try:
         inline_keyboard = message.reply_to_message.reply_markup.inline_keyboard
-        # Берем callback_data первой кнопки ("Отмена"), там зашит ID хозяина
-        button_data = inline_keyboard[0][0].callback_data
+        button_data = inline_keyboard.callback_data
         owner_id_from_msg = int(button_data.split(":")[-1])
     except Exception:
         return
 
-    # ЖЕСТКАЯ ЗАЩИТА: Если команду пишет посторонний человек, а не хозяин профиля
+    # ЖЕСТКАЯ ПРОВЕРКА: Если команду пишет левый чел, а не хозяин профиля
     if user_id != owner_id_from_msg:
         return
 
-    # Отрезаем команду, берем текст описания
+    # Извлекаем сам текст описания
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply("Вы не ввели текст описания!")
         return
         
-    desc_text = args[1].strip()
+    desc_text = args.strip()
     
     # Проверка лимита в 50 символов
     if len(desc_text) > 50:
         await message.reply("Описание не должно превышать 50 символов! Попробуйте снова")
         return
 
-    # Чистим чат
+    # Чистим чат от команды и сообщения инструкции
     try:
         await message.delete()
         await message.reply_to_message.delete()
     except Exception:
         pass
 
-    # Запись в Postgres
+    # Пишем изменения в базу данных Postgres
     import menu_profile
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
@@ -320,7 +319,7 @@ async def cmd_change_description(message: types.Message):
         cursor.close()
         conn.close()
 
-    # Выводим кнопку "Хорошо"
+    # Показываем финальный экран успеха с кнопкой Хорошо
     builder = InlineKeyboardBuilder()
     builder.button(text="Хорошо", callback_data=f"open_edit_menu:{user_id}")
     builder.adjust(1)
