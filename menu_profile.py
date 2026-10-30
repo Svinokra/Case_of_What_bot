@@ -269,7 +269,7 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
 
 async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     builder = InlineKeyboardBuilder()
-    # Кнопка Отмена возвращает в раздел: Изменение профиля
+    # Кнопка Отмена гарантированно вернет в Раздел: Изменение профиля
     builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
     builder.adjust(1)
 
@@ -279,7 +279,8 @@ async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
         "/change_description Моё описание (пример)\n\n"
         "Не превышайте лимит в 50 символов!"
     )
-    await callback.message.edit_text(text=text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+    # Исправлено: убран parse_mode, который вешал отправку сообщения
+    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
 
 async def cancel_description_input(callback: types.CallbackQuery, target_id: int):
     if callback.from_user.id != target_id:
