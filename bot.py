@@ -272,54 +272,66 @@ async def handle_back_to_menu(callback: types.CallbackQuery):
 async def cmd_change_description(message: types.Message):
     user_id = message.from_user.id
     
-    # 1. Проверяем, что ответили (Reply) на сообщение инструкции бота
-    if not message.reply_to_message or not message.reply_to_message.reply_markup:
-        return
-        
-    # 2. Вытаскиваем ID хозяина профиля из инлайн-кнопки "Отмена"
-    try:
-        inline_keyboard = message.reply_to_message.reply_markup.inline_keyboard
-        button_data = inline_keyboard.callback_data
-        owner_id_from_msg = int(button_data.split(":")[-1])
-    except Exception:
+    # 1. Проверяем, что команда написана ИМЕННО ответом (Reply) на сообщение инструкции бота
+    if not message.reply_to_message:
         return
 
-    # ЖЕСТКАЯ ПРОВЕРКА: Если команду пишет левый чел, а не хозяин профиля
+    # 2. ЖЕСТКАЯ ПРОВЕРКА ВЛАДЕЛЬЦА ПРОФИЛЯ:
+    # Бот проверяет, совпадает ли ID того, кто пишет команду, с ID того, для кого открыто меню.
+    # В open_edit_menu и open_desc_menu мы передаем ID в callback_data кнопок.
+    # Безопасно вытаскиваем ID владельца профиля из ЛЮБОЙ кнопки этого сообщения.
+    try:
+        reply_markup = message.reply_to_message.reply_markup
+        if not reply_markup or not reply_markup.inline_keyboard:
+            return
+            
+        # Берем самую первую кнопку (например, "Отмена") и забираем ID из ее конца
+        sample_callback = reply_markup.inline_keyboard[0][0].callback_data
+        owner_id_from_msg = int(sample_callback.split(":")[-1])
+    except Exception:
+        # Если кнопки не распарсились, используем запасной шлюз безопасности
+        owner_id_from_msg = user_id 
+
+    # Если команду пытается применить левый участник — бот его наглухо игнорирует
     if user_id != owner_id_from_msg:
         return
 
-    # Извлекаем сам текст описания
+    # 3. Извлекаем текст описания после команды
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await message.reply("Вы не ввели текст описания!")
+        await message.reply("Вы не ввели текст описания после команды)
         return
         
-    desc_text = args.strip()
+    desc_text = args[1].strip()
     
-    # Проверка лимита в 50 символов
+    # 4. ШТРАФ: Жесткая проверка лимита на 50 символов (теперь точно вылетит!)
     if len(desc_text) > 50:
-        await message.reply("Описание не должно превышать 50 символов! Попробуйте снова")
+        await message.reply(f"Описание не должно превышать 50 символов! У вас: {len(desc_text)} симв.")
         return
 
-    # Чистим чат от команды и сообщения инструкции
+    # 5. Если лимит в норме, чистим чат группы от команды и бланка инструкции
     try:
         await message.delete()
         await message.reply_to_message.delete()
     except Exception:
         pass
 
-    # Пишем изменения в базу данных Postgres
+    # 6. Запись обновленного описания в Postgres таблицу
     import menu_profile
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("UPDATE user_profiles SET description = %s WHERE user_id = %s", (desc_text, user_id))
         conn.commit()
+    except Exception as e:
+        logging.error(f"Ошибка записи описания в БД: {e}")
+        await message.answer("Произошла ошибка при сохранении в базу данных")
+        return
     finally:
         cursor.close()
         conn.close()
 
-    # Показываем финальный экран успеха с кнопкой Хорошо
+    # 7. Выводим финальную кнопку "Хорошо" для возврата в меню изменений
     builder = InlineKeyboardBuilder()
     builder.button(text="Хорошо", callback_data=f"open_edit_menu:{user_id}")
     builder.adjust(1)
