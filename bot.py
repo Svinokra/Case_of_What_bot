@@ -196,22 +196,34 @@ async def cmd_open_menu(message: types.Message):
 async def handle_menu_clicks(callback: types.CallbackQuery):
     data = callback.data
     
-    # Если в кнопке нет двоеточия, это не наше меню — игнорируем
     if ":" not in data:
         return
         
     data_parts = data.split(":")
-    owner_id = int(data_parts[-1])
     action_data = data_parts[0]
+    owner_id = int(data_parts[-1])
     
-    # Жесткая проверка владельца меню
     if callback.from_user.id != owner_id:
         await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
         return
         
     await callback.answer()
 
-    # 1. Корневые разделы меню
+    # Кнопка НАЗАД из профиля в главное меню бота
+    if action_data == "back_to_menu":
+        user_name = callback.from_user.first_name
+        builder = InlineKeyboardBuilder()
+        builder.button(text="Профиль", callback_data=f"menu_profile:{owner_id}")
+        builder.button(text="Магазин", callback_data=f"menu_shop:{owner_id}")
+        builder.button(text="Развлечения", callback_data=f"menu_games:{owner_id}")
+        builder.button(text="Рейтинг", callback_data=f"menu_rating:{owner_id}")
+        builder.button(text="Информация", callback_data=f"menu_info:{owner_id}")
+        builder.adjust(2, 2, 1)
+        
+        await callback.message.edit_text(text=f"-- Для {user_name} --\nГлавное меню:", reply_markup=builder.as_markup())
+        return
+
+    # Корневые разделы
     if action_data == "menu_profile":
         import menu_profile
         await menu_profile.open_profile(callback, owner_id)
@@ -228,8 +240,8 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import menu_info
         await menu_info.open_info(callback)
         
-    # 2. Кнопки изменения профиля (Описание, Пол, Назад, Отмена, Хорошо)
-    if action_data in ["edit_profile", "open_edit_menu", "edit_gender", "set_gender", "edit_desc", "back_to_profile"]:
+    # Перенаправление кнопок изменений профиля (включая Описание)
+    if action_data in ["edit_profile", "open_edit_menu", "edit_gender", "set_gender", "edit_desc", "cancel_desc", "back_to_profile"]:
         import menu_profile
         await menu_profile.handle_profile_callbacks(callback)
 
