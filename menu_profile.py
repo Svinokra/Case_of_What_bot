@@ -107,6 +107,7 @@ async def open_profile(callback: types.CallbackQuery, owner_id: int):
     
     builder = InlineKeyboardBuilder()
     builder.button(text="Изменить профиль", callback_data=f"edit_profile:{user.id}")
+    # Жестко прописываем оригинальный callback возврата в главное меню бота
     builder.button(text="Назад", callback_data=f"back_to_menu:{owner_id}")
     builder.adjust(1)
     
@@ -227,6 +228,7 @@ async def handle_note_management(message: types.Message):
 # 1. ПЕРЕХОД В РАЗДЕЛ ИЗМЕНЕНИЯ ПРОФИЛЯ
 async def open_edit_menu(callback: types.CallbackQuery, target_id: int):
     builder = InlineKeyboardBuilder()
+    # Кнопка Описание отправляет точный сигнал для перехода во вкладку инструкции
     builder.button(text="Описание", callback_data=f"edit_desc:{target_id}")
     builder.button(text="Пол", callback_data=f"edit_gender:{target_id}")
     builder.button(text="Назад", callback_data=f"back_to_profile:{target_id}")
@@ -267,6 +269,7 @@ async def save_gender(callback: types.CallbackQuery, gender_type: str, target_id
 
 async def open_desc_menu(callback: types.CallbackQuery, target_id: int):
     builder = InlineKeyboardBuilder()
+    # Кнопка Отмена возвращает в раздел: Изменение профиля
     builder.button(text="Отмена", callback_data=f"open_edit_menu:{target_id}")
     builder.adjust(1)
 
@@ -299,6 +302,7 @@ async def handle_profile_callbacks(callback: types.CallbackQuery):
         gender_type = data_parts[1]
         await save_gender(callback, gender_type, target_id)
     elif action_data == "edit_desc":
+        # Четкий вызов инструкции описания
         await open_desc_menu(callback, target_id)
     elif action_data == "back_to_profile":
         await open_profile(callback, target_id)
