@@ -129,10 +129,12 @@ async def show_profile_by_username(message: types.Message, username_arg: str, bo
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        # Ищем точное совпадение юзернейма в нижнем регистре
         cursor.execute("""
             SELECT user_id, username, description, gender, coins, reputation, joined_date, note 
-            FROM user_profiles WHERE LOWER(username) = %s
-        """, (username_arg.lower(),))
+            FROM user_profiles 
+            WHERE LOWER(username) = LOWER(%s)
+        """, (username_arg,))
         row = cursor.fetchone()
         
         if not row:
