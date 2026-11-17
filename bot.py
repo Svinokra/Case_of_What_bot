@@ -127,22 +127,25 @@ async def handle_admin_reply(message: types.Message):
 async def cmd_view_profile(message: types.Message):
     import menu_profile
     
-    # 1. Вариант через Reply
+    # 1. Вариант через Reply (Ответ на сообщение)
     if message.reply_to_message:
         target_user = message.reply_to_message.from_user
-        
-        # ЗАЩИТА: Если это бот, то профиль не создаем и не показываем
         if target_user.is_bot:
             return
-            
         await menu_profile.show_profile_by_reply(message, target_user, bot)
         return
         
     # 2. Вариант через @username
     args = message.text.split(maxsplit=1)
     if len(args) > 1:
+        # Берем строго второй элемент списка (индекс 1) — сам юзернейм
         username_arg = args[1].strip().replace("@", "")
-        await menu_profile.show_profile_by_username(message, username_arg, bot)
+        if username_arg:
+            await menu_profile.show_profile_by_username(message, username_arg, bot)
+            return
+
+    # 3. Если ввели просто /view_profile без ответа и без @username
+    await message.reply("Ответьте на сообщения участника этой командой либо припишите команде @юзернейм участника")
 
 # Команды изменения репутации (только по реплаю в группе)
 @dp.message(Command("plus_rep", "minus_rep"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
