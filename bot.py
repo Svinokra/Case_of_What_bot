@@ -127,8 +127,14 @@ async def handle_admin_reply(message: types.Message):
 async def cmd_view_profile(message: types.Message):
     import menu_profile
     
-    # 1. Вариант через Reply (Ответ на сообщение)
-    if message.reply_to_message:
+    # Проверяем, что это настоящий Reply на сообщение человека, а не системная привязка к теме (Topic)
+    is_real_reply = (
+        message.reply_to_message is not None 
+        and message.reply_to_message.forum_topic_created is None
+    )
+    
+    # 1. Вариант через реальный Reply
+    if is_real_reply:
         target_user = message.reply_to_message.from_user
         if target_user.is_bot:
             return
@@ -138,27 +144,36 @@ async def cmd_view_profile(message: types.Message):
     # 2. Вариант через @username
     args = message.text.split(maxsplit=1)
     if len(args) > 1:
-        # Берем строго второй элемент списка (индекс 1) — сам юзернейм
         username_arg = args[1].strip().replace("@", "")
         if username_arg:
             await menu_profile.show_profile_by_username(message, username_arg, bot)
             return
 
-    # 3. Если ввели просто /view_profile без ответа и без @username
+    # 3. Если команду ввели пустой
     await message.reply("Ответьте на сообщения участника этой командой либо припишите команде @юзернейм участника")
 
 # Команды изменения репутации (только по реплаю в группе)
-@dp.message(Command("plus_rep", "minus_rep"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
+@dp.message(
+    Command("plus_rep", "minus_rep"), 
+    F.chat.id == ALLOWED_GROUP_ID, 
+    F.reply_to_message, 
+    ~F.reply_to_message.forum_topic_created
+)
 async def cmd_change_reputation(message: types.Message):
     import menu_profile
     await menu_profile.handle_reputation_change(message)
 
 # Команды управления заметками от Создателя бота (только по реплаю в группе)
-@dp.message(Command("give_note", "delete_note"), F.chat.id == ALLOWED_GROUP_ID, F.reply_to_message)
+@dp.message(
+    Command("give_note", "delete_note"), 
+    F.chat.id == ALLOWED_GROUP_ID, 
+    F.reply_to_message, 
+    ~F.reply_to_message.forum_topic_created
+)
 async def cmd_manage_notes(message: types.Message):
     import menu_profile
     await menu_profile.handle_note_management(message)
-
+    
 # ЛОГИКА ДЛЯ ГРУППЫ (МЕНЮ)
 @dp.message(Command("open_menu"), F.chat.id == ALLOWED_GROUP_ID)
 async def cmd_open_menu(message: types.Message):
