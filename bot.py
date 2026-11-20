@@ -16,8 +16,6 @@ from aiohttp import web
 # ГЛАВНЫЕ НАСТРОЙКИ
 TOKEN = "8553478446:AAGz3WNx7PF3NozPVNjV-4NWfnwNOp9aBlY"
 ALLOWED_GROUP_ID = -1002019929433  # ID вашей группы (должен быть числом, обычно начинается с -100)
-OWNER_ID = 5374445721              # Telegram ID владельца (число), которому бот будет слать заявки
-OWNER_USERNAME = "@SlavaUmni"      # Юзернейм владельца для текста (опционально)
 RENDER_URL = "https://case-of-what-bot.onrender.com" 
 
 # ИНИЦИАЛИЗАЦИЯ БОТА И ДИСПЕТЧЕРА
@@ -26,102 +24,13 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 # Временные хранилища данных (в оперативной памяти)
-user_cooldowns = {}  # Для таймера ограничений: {user_id: datetime}
-user_states = {}     # Для отслеживания шагов пользователя в ЛС
-forwarded_requests = {} # Для связи ответов админа с пользователями: {admin_message_id: user_id}
 user_menus = {} # Для хранения ID старых меню {user_id: message_id}
 
 # ЛОГИКА ДЛЯ ЛИЧНЫХ СООБЩЕНИЙ (ЛС)
-# Фильтр для проверки, что сообщение написано в ЛС
-def is_private(message: types.Message) -> bool:
-    return message.chat.type == "private"
-
-@dp.message(Command("start"), F.chat.type == "private")
-async def cmd_start(message: types.Message):
-    await message.answer("Введите команду /I_want_group если хотите написать владельцу группы")
-
-@dp.message(Command("I_want_group"), F.chat.type == "private")
-async def cmd_want_group(message: types.Message):
-    user_id = message.from_user.id
-    
-    # Проверка таймера на 2 часа (Абуз-фильтр)
-    if user_id in user_cooldowns:
-        remaining_time = user_cooldowns[user_id] - datetime.now()
-        if remaining_time.total_seconds() > 0:
-            # Переводим секунды в читаемый формат (минуты)
-            minutes = int(remaining_time.total_seconds() // 60)
-            await message.answer(f"Команда /I_want_group будет работать для вас только через 2 часа")
-            return
-
-    # Если таймер прошел или его нет, переводим в состояние ожидания причины
-    user_states[user_id] = "waiting_reason"
-    await message.answer("Почему вы хотите попасть в группу? Напишите")
-
-# Хэндлер на любые текстовые сообщения в ЛС
 @dp.message(F.chat.type == "private")
 async def handle_private_messages(message: types.Message):
-    user_id = message.from_user.id
-    current_state = user_states.get(user_id)
-
-    if current_state == "waiting_reason":
-        user_username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.full_name
-        
-        # Ставим ограничение на 2 часа и сбрасываем стейт ожидания
-        user_cooldowns[user_id] = datetime.now() + timedelta(hours=2)
-        user_states.pop(user_id, None)
-        
-        # Отвечаем пользователю в ЛС
-        await message.answer("Дождитесь ответа от владельца группы")
-        
-        try:
-            # 1. Бот ПЕРЕСЫЛАЕТ оригинальное сообщение пользователя владельцу
-            forwarded = await message.forward(chat_id=OWNER_ID)
-            
-            # 2. Бот отправляет владельцу инструкцию вдогонку
-            admin_instruction = (
-                f"Сообщение выше прислал пользователь {user_username}.\n\n"
-                f"Напишите сюда ваш ответ этому пользователю (ответ на пересланное сообщение)\n"
-                f"И не забудьте вставить ссылку приглашения в группу!"
-            )
-            await bot.send_message(chat_id=OWNER_ID, text=admin_instruction)
-            
-            # Связываем ID пересланного сообщения с ID пользователя для Reply-ответа
-            forwarded_requests[forwarded.message_id] = user_id
-            
-        except Exception as e:
-            logging.error(f"Не удалось переслать сообщение владельцу: {e}")
-            
-    else:
-        await message.answer("Введите команду /I_want_group если хотите написать владельцу группы")
-
-# Хэндлер для владельца: обработка ответа (Reply) на заявку
-@dp.message(F.chat.type == "private", F.reply_to_message)
-async def handle_admin_reply(message: types.Message):
-    # Проверяем, что отвечает именно владелец
-    if message.from_user.id != OWNER_ID:
-        return
-        
-    reply_id = message.reply_to_message.message_id
+    await message.answer("Бот работает только в группе Случай Чего, напишите владельцу группы о вступлении: @SlavaUmni")
     
-    # Проверяем, есть ли такое сообщение в нашей базе заявок
-    if reply_id in forwarded_requests:
-        target_user_id = forwarded_requests[reply_id]
-        admin_answer = message.text # Текст ответа владельца (его ссылка)
-        
-        try:
-            # Отправляем ответ пользователю, который подавал заявку
-            await bot.send_message(chat_id=target_user_id, text=admin_answer)
-            
-            # Уведомляем владельца, что всё прошло успешно
-            user_username = forwarded_requests.get(reply_id) # или можно вытащить из логов
-            await message.answer(f"Ваш ответ был передан этому пользователю")
-            
-            # Удаляем заявку из активных, так как ответ дан
-            forwarded_requests.pop(reply_id, None)
-        except Exception as e:
-            await message.answer("Не удалось доставить сообщение пользователю (возможно он заблокировал бота)")
-            logging.error(f"Ошибка отправки ответа пользователю: {e}")
-
 # ЛОГИКА ПРОФИЛЕЙ
 @dp.message(Command("view_profile"), F.chat.id == ALLOWED_GROUP_ID)
 async def cmd_view_profile(message: types.Message):
