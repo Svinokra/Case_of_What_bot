@@ -16,6 +16,8 @@ from aiohttp import web
 # ГЛАВНЫЕ НАСТРОЙКИ
 TOKEN = "8553478446:AAGz3WNx7PF3NozPVNjV-4NWfnwNOp9aBlY"
 ALLOWED_GROUP_ID = -1002019929433  # ID вашей группы (должен быть числом, обычно начинается с -100)
+OWNER_ID = 7847585206
+OWNER_USERNAME = "@votv_228"
 RENDER_URL = "https://case-of-what-bot.onrender.com" 
 
 # ИНИЦИАЛИЗАЦИЯ БОТА И ДИСПЕТЧЕРА
@@ -27,6 +29,36 @@ dp = Dispatcher()
 user_menus = {} # Для хранения ID старых меню {user_id: message_id}
 
 # ЛОГИКА ДЛЯ ЛИЧНЫХ СООБЩЕНИЙ (ЛС)
+@dp.message(Command("attention_message"), F.chat.type == "private")
+async def cmd_attention_message(message: types.Message):
+    clean_owner_username = OWNER_USERNAME.lstrip("@").lower()
+    user_username = (message.from_user.username or "").lower()
+
+    # Проверка по ID и по username одновременно
+    if message.from_user.id != OWNER_ID or user_username != clean_owner_username:
+        await message.answer("Эта команда недоступна для вас")
+        return
+
+    # Извлекаем текст после команды
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2 or not args[1].strip():
+        await message.answer("Введите текст после команды /attention_message")
+        return
+
+    announcement_text = args[1].strip()
+
+    try:
+        # Отправляем от лица бота в основную тему (General) группы
+        await bot.send_message(
+            chat_id=ALLOWED_GROUP_ID,
+            text=announcement_text,
+            message_thread_id=None
+        )
+        await message.answer("Сообщение отправилось в группу")
+    except Exception as e:
+        logging.error(f"Ошибка при отправке объявления в группу: {e}")
+        await message.answer("Не удалось отправить сообщение в группу, проверьте права бота.")
+
 @dp.message(F.chat.type == "private")
 async def handle_private_messages(message: types.Message):
     await message.answer("Бот работает только в группе Случай Чего, напишите владельцу группы о вступлении: @SlavaUmni")
