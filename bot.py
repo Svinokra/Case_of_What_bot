@@ -220,6 +220,14 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import menu_games
         await menu_games.handle_games_callbacks(callback)
 
+    # Перенаправление кнопок игры Особняк
+    if action_data in [
+        "mansion_start", "mansion_door", "mansion_collect",
+        "mansion_leave", "mansion_choice_ok", "mansion_choice_bad"
+    ]:
+        import game_mansion
+        await game_mansion.handle_mansion_callbacks(callback)
+
 @dp.callback_query(F.data.startswith("back_to_menu:"))
 async def handle_back_to_menu(callback: types.CallbackQuery):
     owner_id = int(callback.data.split(":")[1])
