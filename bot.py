@@ -204,6 +204,11 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import menu_profile
         await menu_profile.handle_profile_callbacks(callback)
 
+    # Перенаправление кнопок раздела Развлечения
+    if action_data in ["game_dice", "dice_cancel", "game_checkers", "game_scanner", "game_mansion", "game_cases", "game_minesweeper"]:
+        import menu_games
+        await menu_games.handle_games_callbacks(callback)
+
 @dp.callback_query(F.data.startswith("back_to_menu:"))
 async def handle_back_to_menu(callback: types.CallbackQuery):
     owner_id = int(callback.data.split(":")[1])
@@ -293,6 +298,12 @@ async def cmd_change_description(message: types.Message):
         text="Описание было успешно изменено", 
         reply_markup=builder.as_markup()
     )
+
+# ПЕРЕХВАТ ТЕКСТОВЫХ СООБЩЕНИЙ В ГРУППЕ (ДЛЯ СТАВОК В ИГРАХ)
+@dp.message(F.chat.id == ALLOWED_GROUP_ID, F.text)
+async def handle_group_text_messages(message: types.Message):
+    import menu_games
+    await menu_games.process_dice_bet(message)
 
 # ВЕБ-СЕРВЕР И AIOHTTP
 async def handle_ping(request):
