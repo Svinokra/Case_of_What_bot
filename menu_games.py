@@ -79,8 +79,7 @@ async def open_games(callback: types.CallbackQuery):
 
     text = "Раздел: Развлечения\n\nВыберите игру:"
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
-
-
+    
 async def start_dice_game(callback: types.CallbackQuery):
     user = callback.from_user
     owner_id = int(callback.data.split(":")[-1])
