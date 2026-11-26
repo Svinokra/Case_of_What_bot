@@ -4,9 +4,8 @@ from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import menu_profile
 
-# Состояния игроков, ожидающих ввода ставки в "Кости":
-# {user_id: {"chat_id": int, "thread_id": int | None, "prompt_msg_id": int}}
 dice_waiting = {}
+
 
 def ensure_cooldowns_table():
     conn = menu_profile.get_db_connection()
@@ -27,7 +26,6 @@ def ensure_cooldowns_table():
 
 
 def get_dice_cooldown(user_id: int) -> bool:
-    """Возвращает True, если 1 час ещё не прошёл."""
     ensure_cooldowns_table()
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
@@ -37,9 +35,9 @@ def get_dice_cooldown(user_id: int) -> bool:
             (user_id,)
         )
         row = cursor.fetchone()
-        if not row or not row:
+        if not row or not row[0]:
             return False
-        return datetime.now() < row + timedelta(hours=1)
+        return datetime.now() < row[0] + timedelta(hours=1)
     finally:
         cursor.close()
         conn.close()
@@ -62,10 +60,8 @@ def set_dice_cooldown(user_id: int):
         conn.close()
 
 
-# 1. ГЛАВНЫЙ ЭКРАН РАЗДЕЛА "РАЗВЛЕЧЕНИЯ"
 async def open_games(callback: types.CallbackQuery):
     owner_id = int(callback.data.split(":")[-1])
-    # Если пользователь нажал "Назад" из костей, убираем его из ожидания ставки
     dice_waiting.pop(owner_id, None)
 
     builder = InlineKeyboardBuilder()
@@ -77,19 +73,16 @@ async def open_games(callback: types.CallbackQuery):
     builder.button(text="Сапёр", callback_data=f"game_minesweeper:{owner_id}")
     builder.button(text="Назад", callback_data=f"back_to_menu:{owner_id}")
 
-    # Сетка: 3 кнопки, 2 кнопки, 1 кнопка, 1 кнопка
     builder.adjust(3, 2, 1, 1)
 
     text = "Раздел: Развлечения\n\nВыберите игру:"
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
 
 
-# 2. НАЖАТИЕ НА ИГРУ "КОСТИ"
 async def start_dice_game(callback: types.CallbackQuery):
     user = callback.from_user
     owner_id = int(callback.data.split(":")[-1])
 
-    # Проверка часового кулдауна
     if get_dice_cooldown(user.id):
         builder = InlineKeyboardBuilder()
         builder.button(text="Хорошо", callback_data=f"menu_games:{owner_id}")
@@ -101,7 +94,6 @@ async def start_dice_game(callback: types.CallbackQuery):
         )
         return
 
-    # Удаляем старое меню, чтобы бот ответил новым сообщением с призывом к ставке
     try:
         await callback.message.delete()
     except Exception:
@@ -112,8 +104,8 @@ async def start_dice_game(callback: types.CallbackQuery):
     builder.button(text="Назад", callback_data=f"dice_cancel:{owner_id}")
     builder.adjust(1)
 
-    prompt_msg = await callback.message.answer(
-        text=f"{mention} назовите свою ставку от 1 до 6",
+   prompt_msg = await callback.message.answer(
+        text=f"{mention} Ответьте на это сообщение командой /moyastavka {{ваша цифра от 1 до 6}}",
         reply_markup=builder.as_markup()
     )
 
@@ -123,46 +115,38 @@ async def start_dice_game(callback: types.CallbackQuery):
         "prompt_msg_id": prompt_msg.message_id
     }
 
-
-# 3. ОТМЕНА СТАВКИ ПО КНОПКЕ "НАЗАД"
 async def cancel_dice_game(callback: types.CallbackQuery):
     owner_id = int(callback.data.split(":")[-1])
     dice_waiting.pop(owner_id, None)
     await open_games(callback)
 
 
-# 4. ОБРАБОТКА СООБЩЕНИЯ СО СТАВКОЙ В ГРУППЕ
 async def process_dice_bet(message: types.Message) -> bool:
-    """
-    Проверяет, ждёт ли бот ставку от этого пользователя.
-    Возвращает True, если сообщение было обработано как ставка.
-    """
     user = message.from_user
     if not user or user.id not in dice_waiting:
         return False
 
     state = dice_waiting[user.id]
 
-    # Проверяем, что сообщение написано в том же чате и в той же теме
-    if message.chat.id != state["chat_id"]:
-        return False
-    if getattr(message, "message_thread_id", None) != state["thread_id"]:
+    if not message.reply_to_message or message.reply_to_message.message_id != state["prompt_msg_id"]:
         return False
 
-    # Игнорируем всё, кроме целого числа от 1 до 6
     if not message.text:
         return False
-    text = message.text.strip()
-    if text not in ["1", "2", "3", "4", "5", "6"]:
+
+    parts = message.text.strip().split()
+    # Ожидаем строго формат: /moyastavka 2
+    if len(parts) != 2 or not parts[0].startswith("/moyastavka"):
         return False
 
-    bet = int(text)
+    if parts[1] not in ["1", "2", "3", "4", "5", "6"]:
+        return False
 
-    # Убираем игрока из ожидания и сразу ставим кулдаун на 1 час
+    bet = int(parts[1])
+
     dice_waiting.pop(user.id, None)
     set_dice_cooldown(user.id)
 
-    # Убираем кнопку "Назад" у предыдущего сообщения с вопросом
     try:
         await message.bot.edit_message_reply_markup(
             chat_id=state["chat_id"],
@@ -172,20 +156,18 @@ async def process_dice_bet(message: types.Message) -> bool:
     except Exception:
         pass
 
-    # Бот отвечает на сообщение игрока анимированным кубиком
     dice_msg = await message.reply_dice(emoji="🎲")
-    rolled_value = dice_msg.dice.value  # Telegram сразу отдаёт выпавшее число (1..6)
+    rolled_value = dice_msg.dice.value
 
-    # Ждём окончания анимации броска кубика в клиенте Telegram
     await asyncio.sleep(3.5)
 
-    # Гарантируем, что профиль игрока есть в базе, и работаем с балансом
     menu_profile.get_or_create_profile(user.id, user.username, user.full_name)
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user.id,))
-        current_coins = cursor.fetchone() or 0
+        row = cursor.fetchone()
+        current_coins = row[0] if row else 0
 
         if rolled_value == bet:
             new_coins = current_coins + 8
@@ -218,14 +200,12 @@ async def process_dice_bet(message: types.Message) -> bool:
     return True
 
 
-# 5. РОУТЕР КОЛБЭКОВ ДЛЯ РАЗДЕЛА ИГР
 async def handle_games_callbacks(callback: types.CallbackQuery):
-    action = callback.data.split(":")
+    action = callback.data.split(":")[0]
 
     if action == "game_dice":
         await start_dice_game(callback)
     elif action == "dice_cancel":
         await cancel_dice_game(callback)
     elif action in ["game_checkers", "game_scanner", "game_mansion", "game_cases", "game_minesweeper"]:
-        # Временная заглушка для игр, которые мы сделаем позже
         await callback.answer("Эта игра пока находится в разработке", show_alert=True)
