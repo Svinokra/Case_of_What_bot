@@ -105,7 +105,7 @@ async def start_dice_game(callback: types.CallbackQuery):
     builder.button(text="Назад", callback_data=f"dice_cancel:{owner_id}")
     builder.adjust(1)
 
-   prompt_msg = await callback.message.answer(
+    prompt_msg = await callback.message.answer(
         text=f"{mention} Ответьте на это сообщение командой /moyastavka {{ваша цифра от 1 до 6}}",
         reply_markup=builder.as_markup()
     )
