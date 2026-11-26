@@ -6,7 +6,6 @@ import menu_profile
 
 dice_waiting = {}
 
-
 def ensure_cooldowns_table():
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
@@ -35,9 +34,12 @@ def get_dice_cooldown(user_id: int) -> bool:
             (user_id,)
         )
         row = cursor.fetchone()
-        if not row or not row[0]:
+        if not row:
             return False
-        return datetime.now() < row[0] + timedelta(hours=1)
+        (last_played,) = row
+        if not last_played:
+            return False
+        return datetime.now() < last_played + timedelta(hours=1)
     finally:
         cursor.close()
         conn.close()
@@ -135,14 +137,13 @@ async def process_dice_bet(message: types.Message) -> bool:
         return False
 
     parts = message.text.strip().split()
-    # Ожидаем строго формат: /moyastavka 2
-    if len(parts) != 2 or not parts[0].startswith("/moyastavka"):
+    if len(parts) != 2:
+        return False
+    cmd, bet_str = parts
+    if not cmd.startswith("/moyastavka") or bet_str not in ["1", "2", "3", "4", "5", "6"]:
         return False
 
-    if parts[1] not in ["1", "2", "3", "4", "5", "6"]:
-        return False
-
-    bet = int(parts[1])
+    bet = int(bet_str)
 
     dice_waiting.pop(user.id, None)
     set_dice_cooldown(user.id)
@@ -167,7 +168,7 @@ async def process_dice_bet(message: types.Message) -> bool:
     try:
         cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user.id,))
         row = cursor.fetchone()
-        current_coins = row[0] if row else 0
+        (current_coins,) = row if row else (0,)
 
         if rolled_value == bet:
             new_coins = current_coins + 8
@@ -201,11 +202,11 @@ async def process_dice_bet(message: types.Message) -> bool:
 
 
 async def handle_games_callbacks(callback: types.CallbackQuery):
-    action = callback.data.split(":")[0]
+    data = callback.data
 
-    if action == "game_dice":
+    if data.startswith("game_dice:"):
         await start_dice_game(callback)
-    elif action == "dice_cancel":
+    elif data.startswith("dice_cancel:"):
         await cancel_dice_game(callback)
-    elif action in ["game_checkers", "game_scanner", "game_mansion", "game_cases", "game_minesweeper"]:
+    elif data.startswith(("game_checkers:", "game_scanner:", "game_mansion:", "game_cases:", "game_minesweeper:")):
         await callback.answer("Эта игра пока находится в разработке", show_alert=True)
