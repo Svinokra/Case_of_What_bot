@@ -4,6 +4,7 @@ from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import menu_profile
 import random
+import game_mansion
 
 dice_waiting = {}
 
@@ -241,22 +242,22 @@ def build_scanner_result(target_mention: str, percent: int) -> str:
         arrow = "🔺"
         status = f"Уровень: Безопасный ({percent}% дозы) 😇"
     elif percent <= 28:
-        arrow = "     🔺"
+        arrow = "       🔺"
         status = f"Уровень: Низкий ({percent}% дозы) 😊"
     elif percent <= 42:
-        arrow = "          🔺"
+        arrow = "              🔺"
         status = f"Уровень: Умеренный ({percent}% дозы) 🙂"
     elif percent <= 57:
-        arrow = "                🔺"
+        arrow = "                    🔺"
         status = f"Уровень: Средний ({percent}% дозы) 😐"
     elif percent <= 71:
-        arrow = "                     🔺"
+        arrow = "                           🔺"
         status = f"Уровень: Повышенный ({percent}% дозы) 😳"
     elif percent <= 85:
-        arrow = "                          🔺"
+        arrow = "                                  🔺"
         status = f"Уровень: Высокий ({percent}% дозы) 😨"
     else:
-        arrow = "                               🔺"
+        arrow = "                                         🔺"
         status = f"Уровень: Критический ({percent}% дозы) 💀"
 
     return (
@@ -327,5 +328,7 @@ async def handle_games_callbacks(callback: types.CallbackQuery):
         await start_scanner_game(callback)
     elif data.startswith("scanner_cancel:"):
         await cancel_scanner_game(callback)
-    elif data.startswith(("game_checkers:", "game_mansion:", "game_cases:", "game_minesweeper:")):
+    elif data.startswith("game_mansion:"):
+        await game_mansion.open_mansion_intro(callback)
+    elif data.startswith(("game_checkers:", "game_cases:", "game_minesweeper:")):
         await callback.answer("Эта игра пока находится в разработке", show_alert=True)
