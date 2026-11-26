@@ -114,6 +114,11 @@ async def cmd_change_reputation(message: types.Message):
 async def cmd_manage_notes(message: types.Message):
     import menu_profile
     await menu_profile.handle_note_management(message)
+
+@dp.message(Command("moyastavka"), F.chat.id == ALLOWED_GROUP_ID)
+async def cmd_moyastavka(message: types.Message):
+    import menu_games
+    await menu_games.process_dice_bet(message)
     
 # ЛОГИКА ДЛЯ ГРУППЫ (МЕНЮ)
 @dp.message(Command("open_menu"), F.chat.id == ALLOWED_GROUP_ID)
