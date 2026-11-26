@@ -119,6 +119,12 @@ async def cmd_manage_notes(message: types.Message):
 async def cmd_moyastavka(message: types.Message):
     import menu_games
     await menu_games.process_dice_bet(message)
+
+# КОМАНДА ДЛЯ ИГРЫ "СКАНЕР"
+@dp.message(Command("scan"), F.chat.id == ALLOWED_GROUP_ID)
+async def cmd_scan(message: types.Message):
+    import menu_games
+    await menu_games.process_scan_command(message)
     
 # ЛОГИКА ДЛЯ ГРУППЫ (МЕНЮ)
 @dp.message(Command("open_menu"), F.chat.id == ALLOWED_GROUP_ID)
@@ -210,7 +216,7 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         await menu_profile.handle_profile_callbacks(callback)
 
     # Перенаправление кнопок раздела Развлечения
-    if action_data in ["game_dice", "dice_cancel", "game_checkers", "game_scanner", "game_mansion", "game_cases", "game_minesweeper"]:
+    if action_data in ["game_dice", "dice_cancel", "game_scanner", "scanner_cancel", "game_checkers", "game_mansion", "game_cases", "game_minesweeper"]:
         import menu_games
         await menu_games.handle_games_callbacks(callback)
 
