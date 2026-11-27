@@ -125,7 +125,13 @@ async def cmd_moyastavka(message: types.Message):
 async def cmd_scan(message: types.Message):
     import menu_games
     await menu_games.process_scan_command(message)
-    
+
+# КОМАНДА ПРИСОЕДИНЕНИЯ К ИГРЕ "ШАШКИ"
+@dp.message(Command("join_checkers"), F.chat.id == ALLOWED_GROUP_ID)
+async def cmd_join_checkers(message: types.Message):
+    import game_checkers
+    await game_checkers.process_join_checkers(message)
+
 # ЛОГИКА ДЛЯ ГРУППЫ (МЕНЮ)
 @dp.message(Command("open_menu"), F.chat.id == ALLOWED_GROUP_ID)
 async def cmd_open_menu(message: types.Message):
@@ -168,7 +174,12 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     
     if ":" not in data:
         return
-        
+
+    if data.startswith(("ck_c:", "ck_surrender:")):
+        import game_checkers
+        await game_checkers.handle_board_click(callback)
+        return
+
     data_parts = data.split(":")
     action_data = data_parts[0]
     owner_id = int(data_parts[-1])
@@ -227,6 +238,14 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     ]:
         import game_mansion
         await game_mansion.handle_mansion_callbacks(callback)
+
+    # Перенаправление кнопок игры Шашки
+    if action_data in [
+        "game_dice", "dice_cancel", "game_scanner", "scanner_cancel",
+        "game_checkers", "checkers_cancel", "game_mansion", "game_cases", "game_minesweeper"
+    ]:
+        import menu_games
+        await menu_games.handle_games_callbacks(callback)
 
 @dp.callback_query(F.data.startswith("back_to_menu:"))
 async def handle_back_to_menu(callback: types.CallbackQuery):
