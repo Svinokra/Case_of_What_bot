@@ -157,7 +157,6 @@ async def start_mansion_run(callback: types.CallbackQuery):
     }
     await show_door_choice(callback, owner_id)
 
-
 async def show_door_choice(callback: types.CallbackQuery, owner_id: int):
     session = mansion_sessions.get(owner_id)
     if not session:
@@ -367,8 +366,10 @@ async def open_mansion_door(callback: types.CallbackQuery):
     buffs = menu_shop.get_user_buffs(user.id)
     roll = random.randint(1, 100)
 
-    safe_limit = 40 if buffs["luck"] else 50
-    choice_limit = 95 if buffs["luck"] else 80
+    # Без Удачи: 45% безопасная, 30% с выбором, 25% моментальная опасная
+    # С Удачей:  45% безопасная, 45% с выбором, 10% моментальная опасная
+    safe_limit = 45
+    choice_limit = 90 if buffs["luck"] else 75
 
     # 1. Безопасная комната
     if roll <= safe_limit:
