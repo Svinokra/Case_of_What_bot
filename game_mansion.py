@@ -18,7 +18,7 @@ MONSTERS = [
     "Кунапачати",
     "Туманец",
     "Подожый",
-    "Жеяга",
+    "Штыц",
     "THE FOG",
     "Сухарик",
     "Ярик",
@@ -50,7 +50,7 @@ CHOICE_EVENTS = [
         "Цечиган",
     ),
     (
-        "6040 почему просто смотрит на вас",
+        "6040 почему то просто смотрит на вас",
         "Съесть",
         "Убежать",
         "Сухарик",
@@ -142,7 +142,7 @@ async def start_mansion_run(callback: types.CallbackQuery):
         builder.button(text="Хорошо", callback_data=f"menu_games:{owner_id}")
         builder.adjust(1)
         await callback.message.edit_text(
-            text="Вы можете играть в особняк только через 1 час",
+            text="Вы можете зайти в особняк только через 1 час",
             reply_markup=builder.as_markup()
         )
         return
@@ -228,7 +228,7 @@ async def leave_mansion(callback: types.CallbackQuery):
     builder.adjust(1)
 
     await callback.message.edit_text(
-        text=f"Вы пошли назад собрав с собой {collected}",
+        text=f"Вы пошли назад собрав с собой {collected} СЧ койнов",
         reply_markup=builder.as_markup()
     )
 
