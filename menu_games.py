@@ -6,6 +6,7 @@ import menu_profile
 import random
 import game_mansion
 import game_checkers
+import game_minesweeper
 
 dice_waiting = {}
 
@@ -335,5 +336,7 @@ async def handle_games_callbacks(callback: types.CallbackQuery):
         await game_checkers.start_checkers_search(callback)
     elif data.startswith("checkers_cancel:"):
         await game_checkers.cancel_checkers_search(callback)
-    elif data.startswith(("game_cases:", "game_minesweeper:")):
+    elif data.startswith("game_minesweeper:"):
+        await game_minesweeper.open_minesweeper_intro(callback)
+    elif data.startswith("game_cases:"):
         await callback.answer("Эта игра пока находится в разработке", show_alert=True)
