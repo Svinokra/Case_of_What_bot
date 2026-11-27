@@ -318,8 +318,6 @@ def cleanup_game(game: dict):
 
 
 async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn: str):
-    cleanup_game(game)
-
     if winner_turn == "w":
         winner_user = game["white_user"]
         winner_emoji = "⚪"
@@ -333,32 +331,38 @@ async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn
     give_coins(winner_user.id, winner_user.username, winner_user.full_name, reward)
     winner_mention = format_mention(winner_user)
 
+    # Убираем кнопки со старой доски
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     builder = InlineKeyboardBuilder()
     builder.button(text="Хорошо", callback_data=f"menu_games:{winner_user.id}")
     builder.adjust(1)
 
-    await callback.message.edit_text(
+    await callback.message.answer(
         text=(
             f"{winner_mention} {winner_emoji} выиграл!\n\n"
             f"Победителю начисляется {reward} СЧ койнов"
         ),
         reply_markup=builder.as_markup()
     )
+    cleanup_game(game)
 
 
 async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str):
     game = checkers_games.get(game_id)
     if not game:
-        await callback.answer("Эта партия уже завершена.", show_alert=True)
+        await callback.answer("Эта партия уже завершена", show_alert=True)
         return
 
     user_id = callback.from_user.id
     if user_id not in (game["white_id"], game["black_id"]):
-        await callback.answer("Вы не участвуете в этой партии!", show_alert=True)
+        await callback.answer("Вы не участвуете в этой партии", show_alert=True)
         return
 
     await callback.answer()
-    cleanup_game(game)
 
     if user_id == game["white_id"]:
         loser_user = game["white_user"]
@@ -375,17 +379,24 @@ async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str)
     give_coins(winner_user.id, winner_user.username, winner_user.full_name, reward)
     loser_mention = format_mention(loser_user)
 
+    # Убираем кнопки со старой доски
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     builder = InlineKeyboardBuilder()
     builder.button(text="Хорошо", callback_data=f"menu_games:{winner_user.id}")
     builder.adjust(1)
 
-    await callback.message.edit_text(
+    await callback.message.answer(
         text=(
             f"{loser_mention} {loser_emoji} сдался!\n\n"
             f"Победителю начислено {reward} СЧ койнов"
         ),
         reply_markup=builder.as_markup()
     )
+    cleanup_game(game)
 
 
 async def handle_board_click(callback: types.CallbackQuery):
