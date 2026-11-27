@@ -286,7 +286,8 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     # Перенаправление кнопок игры Особняк
     if action_data in [
         "mansion_start", "mansion_door", "mansion_collect",
-        "mansion_leave", "mansion_choice_ok", "mansion_choice_bad"
+        "mansion_leave", "mansion_choice_ok", "mansion_choice_bad",
+        "mansion_shield_next"
     ]:
         import game_mansion
         await game_mansion.handle_mansion_callbacks(callback)
