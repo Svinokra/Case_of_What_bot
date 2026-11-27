@@ -56,16 +56,15 @@ async def start_checkers_search(callback: types.CallbackQuery):
         await callback.answer("Вы уже участвуете в активной партии!", show_alert=True)
         return
 
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
+    if user.id in checkers_lobbies:
+        await callback.answer("Вы уже ищете соперника!", show_alert=True)
+        return
 
     builder = InlineKeyboardBuilder()
     builder.button(text="Назад", callback_data=f"checkers_cancel:{owner_id}")
     builder.adjust(1)
 
-    search_msg = await callback.message.answer(
+    await callback.message.edit_text(
         text=(
             "Поиск соперника...\n\n"
             "Другой участник должен ответить на это сообщение командой /join_checkers чтобы присоединиться к вам"
@@ -73,14 +72,10 @@ async def start_checkers_search(callback: types.CallbackQuery):
         reply_markup=builder.as_markup()
     )
 
-    # Обновляем ID последнего меню пользователя, чтобы /open_menu мог его удалить
-    import bot as main_bot
-    main_bot.user_menus[user.id] = search_msg.message_id
-
     checkers_lobbies[user.id] = {
         "chat_id": callback.message.chat.id,
         "thread_id": getattr(callback.message, "message_thread_id", None),
-        "msg_id": search_msg.message_id,
+        "msg_id": callback.message.message_id,
         "host_user": user,
     }
 
