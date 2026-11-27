@@ -5,6 +5,7 @@ from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import menu_profile
 import menu_games
+import menu_shop
 
 # Активные партии Сапёра:
 # {user_id: dict_with_board_state}
@@ -348,9 +349,13 @@ async def handle_minesweeper_cell(callback: types.CallbackQuery):
 
     # ПРОВЕРКА ПОБЕДЫ (открыты все 64 - 10 = 54 безопасные клетки)
     if len(session["revealed"]) >= (64 - TOTAL_MINES):
+        import menu_shop
+        buffs = menu_shop.get_user_buffs(owner_id)
+        reward = 50 if buffs["doubler"] else 25
+
         minesweeper_sessions.pop(owner_id, None)
         set_minesweeper_cooldown(owner_id)
-        give_minesweeper_reward(callback.from_user, amount=25)
+        give_minesweeper_reward(callback.from_user, amount=reward)
         await callback.answer("🎉 Победа!")
 
         builder = InlineKeyboardBuilder()
@@ -358,7 +363,7 @@ async def handle_minesweeper_cell(callback: types.CallbackQuery):
         builder.adjust(1)
 
         await callback.message.edit_text(
-            text="Выигрыш, вы открыли все клетки без мин, вам начислено 25 СЧ койнов",
+            text=f"Выигрыш, вы открыли все клетки без мин, вам начислено {reward} СЧ койнов",
             reply_markup=builder.as_markup()
         )
         return
