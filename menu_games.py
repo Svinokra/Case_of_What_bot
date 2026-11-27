@@ -164,7 +164,6 @@ async def process_dice_bet(message: types.Message) -> bool:
     except Exception:
         pass
 
-import menu_shop
     buffs = menu_shop.get_user_buffs(user.id)
 
     dice_msg = await message.reply_dice(emoji="🎲")
