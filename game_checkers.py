@@ -480,11 +480,6 @@ async def handle_board_click(callback: types.CallbackQuery):
         game["turn"] = enemy_turn
         game["move_num"] += 1
 
-        if not has_any_legal_move(board, enemy_turn):
-            await callback.answer()
-            await finish_game_win(callback, game, turn)
-            return
-
         await callback.answer()
         text, markup = render_board_message(game)
         await callback.message.edit_text(text=text, reply_markup=markup)
@@ -507,11 +502,6 @@ async def handle_board_click(callback: types.CallbackQuery):
         game["must_capture_from"] = None
         game["turn"] = enemy_turn
         game["move_num"] += 1
-
-        if not has_any_legal_move(board, enemy_turn):
-            await callback.answer()
-            await finish_game_win(callback, game, turn)
-            return
 
         await callback.answer()
         text, markup = render_board_message(game)
