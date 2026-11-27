@@ -357,7 +357,7 @@ async def open_mansion_door(callback: types.CallbackQuery):
 
         win_text = (
             f"Вы добрались до 10 комнаты и сразу же забрали {last_coins} СЧ койнов и побежали к выходу\n\n"
-            f"Выигрыш, собранные по прохождению СЧ койны начислялись на ваш баланс"
+            f"Выигрыш, всего за прохождение вам начислено {total_won} СЧ койнов"
         )
         await callback.message.edit_text(text=win_text, reply_markup=builder.as_markup())
         return
@@ -366,10 +366,10 @@ async def open_mansion_door(callback: types.CallbackQuery):
     buffs = menu_shop.get_user_buffs(user.id)
     roll = random.randint(1, 100)
 
-    # Без Удачи: 45% безопасная, 30% с выбором, 25% моментальная опасная
-    # С Удачей:  45% безопасная, 45% с выбором, 10% моментальная опасная
-    safe_limit = 45
-    choice_limit = 90 if buffs["luck"] else 75
+    # Без Удачи: 30% безопасная, 35% с выбором, 35% моментальная опасная
+    # С Удачей:  35% безопасная, 45% с выбором, 20% моментальная опасная
+    safe_limit = 35 if buffs["luck"] else 30
+    choice_limit = 80 if buffs["luck"] else 65
 
     # 1. Безопасная комната
     if roll <= safe_limit:
