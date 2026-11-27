@@ -258,7 +258,7 @@ def build_scanner_result(target_mention: str, percent: int) -> str:
         arrow = "                                  🔺"
         status = f"Уровень: Высокий ({percent}% дозы) 😨"
     else:
-        arrow = "                                         🔺"
+        arrow = "                                    🔺"
         status = f"Уровень: Критический ({percent}% дозы) 💀"
 
     return (
