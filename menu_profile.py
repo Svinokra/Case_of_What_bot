@@ -63,6 +63,23 @@ def get_or_create_profile(user_id: int, username: str, full_name: str):
         cursor.close()
         conn.close()
 
+def get_coins_rank(user_id: int, coins: int) -> int:
+    if coins <= 0:
+        return 0
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT COUNT(*) FROM user_profiles WHERE coins > %s",
+            (coins,)
+        )
+        row = cursor.fetchone()
+        (higher_count,) = row if row else (0,)
+        return higher_count + 1
+    finally:
+        cursor.close()
+        conn.close()
+
 async def get_user_title(chat_id: int, user_id: int, bot: Bot) -> str:
     try:
         member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
@@ -80,30 +97,30 @@ async def get_user_title(chat_id: int, user_id: int, bot: Bot) -> str:
     except Exception:
         return "Участник"
 
-def make_profile_text(username: str, title: str, db_row) -> str:
+def make_profile_text(username: str, title: str, db_row, coins_rank: int = 0) -> str:
     username, description, gender, coins, reputation, joined_date, note = db_row
     date_str = joined_date.strftime("%d.%m.%Y в %H:%M")
     mention = f"@{username}" if username and username != "None" else "Отсутствует"
     
     return (
         f"📋Профиль: {mention}\n\n"
-        f"✏️Описание:\n{description}\n"
+        f"✏️Описание:\n{description}\n\n"
         f"👤 Пол: {gender}\n"
         f"🎖️ Должность: {title}\n"
         f"🪙 СЧ койны: {coins}\n"
         f"✨Репутация: {reputation}\n"
         f"📅 Во вселенной бота: {date_str}\n"
         f"🔖 Заметка от создателя:\n{note}\n\n"
-        f"🏆 Место в рейтинге по СЧ койнам: 0\n"
-        f"🎗️ Место в рейтинге по репутации: 0"
+        f"🏆 Место в рейтинге по СЧ койнам: {coins_rank}"
     )
 
 async def open_profile(callback: types.CallbackQuery, owner_id: int):
     user = callback.from_user
     db_row = get_or_create_profile(user.id, user.username, user.full_name)
     title = await get_user_title(callback.message.chat.id, user.id, callback.bot)
+    coins_rank = get_coins_rank(user.id, db_row[3])
     
-    text = make_profile_text(user.username, title, db_row)
+    text = make_profile_text(user.username, title, db_row, coins_rank)
     
     builder = InlineKeyboardBuilder()
     builder.button(text="Изменить профиль", callback_data=f"edit_profile:{user.id}")
@@ -116,7 +133,9 @@ async def open_profile(callback: types.CallbackQuery, owner_id: int):
 async def show_profile_by_reply(message: types.Message, target_user: types.User, bot: Bot):
     db_row = get_or_create_profile(target_user.id, target_user.username, target_user.full_name)
     title = await get_user_title(message.chat.id, target_user.id, bot)
-    text = make_profile_text(target_user.username, title, db_row)
+    coins_rank = get_coins_rank(target_user.id, db_row[3])
+    
+    text = make_profile_text(target_user.username, title, db_row, coins_rank)
     
     builder = InlineKeyboardBuilder()
     if message.from_user.id == target_user.id:
@@ -144,7 +163,8 @@ async def show_profile_by_username(message: types.Message, username_arg: str, bo
         title = await get_user_title(message.chat.id, user_id, bot)
         
         db_row = (username, description, gender, coins, reputation, joined_date, note)
-        text = make_profile_text(username, title, db_row)
+        coins_rank = get_coins_rank(user_id, coins)
+        text = make_profile_text(username, title, db_row, coins_rank)
         
         builder = InlineKeyboardBuilder()
         if message.from_user.id == user_id:
