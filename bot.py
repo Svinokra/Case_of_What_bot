@@ -305,6 +305,11 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
         import game_minesweeper
         await game_minesweeper.handle_minesweeper_callbacks(callback)
 
+# Перенаправление кнопок Магазина
+    if action_data in ["shop_cat", "shop_item", "shop_buy"]:
+        import menu_shop
+        await menu_shop.handle_shop_callbacks(callback)
+
 @dp.callback_query(F.data.startswith("back_to_menu:"))
 async def handle_back_to_menu(callback: types.CallbackQuery):
     owner_id = int(callback.data.split(":")[1])
