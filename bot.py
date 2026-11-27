@@ -229,11 +229,11 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     # Перенаправление кнопок раздела Развлечения
     if action_data in [
         "game_dice", "dice_cancel", "game_scanner", "scanner_cancel",
-        "game_mansion", "game_cases", "game_minesweeper"
+        "game_mansion", "game_cases"
     ]:
         import menu_games
         await menu_games.handle_games_callbacks(callback)
-
+  
     # Перенаправление кнопок игры Особняк
     if action_data in [
         "mansion_start", "mansion_door", "mansion_collect",
@@ -248,6 +248,13 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     ]:
         import game_checkers
         await game_checkers.handle_checkers_callbacks(callback)
+
+# Перенаправление кнопок игры Сапёр
+    if action_data in [
+        "game_minesweeper", "ms_start", "ms_flag_toggle", "ms_c"
+    ]:
+        import game_minesweeper
+        await game_minesweeper.handle_minesweeper_callbacks(callback)
 
 @dp.callback_query(F.data.startswith("back_to_menu:"))
 async def handle_back_to_menu(callback: types.CallbackQuery):
