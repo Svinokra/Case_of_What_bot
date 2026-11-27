@@ -121,13 +121,13 @@ async def open_shop_category(callback: types.CallbackQuery, category: str, owner
         builder.button(text="⚡ Удвоитель", callback_data=f"shop_item:doubler:{owner_id}")
         builder.button(text="Назад", callback_data=f"menu_shop:{owner_id}")
         builder.adjust(1, 2, 1, 1)
-        text = "Категория: Полезное\nВыберите товар:"
+        text = "Категория: Полезное\n\nВыберите товар:"
     else:
         builder.button(text=SHOP_ITEMS["rofl_item"]["name"], callback_data=f"shop_item:rofl_item:{owner_id}")
         builder.button(text=SHOP_ITEMS["rofl_costume"]["name"], callback_data=f"shop_item:rofl_costume:{owner_id}")
         builder.button(text="Назад", callback_data=f"menu_shop:{owner_id}")
         builder.adjust(1, 1, 1)
-        text = "Категория: Рофлы\nВыберите товар:"
+        text = "Категория: Рофлы\n\nВыберите товар:"
 
     await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
 
@@ -144,8 +144,8 @@ async def open_shop_item(callback: types.CallbackQuery, item_key: str, owner_id:
         extra_info = f"\nУ вас сейчас щитов: {buffs['shields']}/6"
 
     text = (
-        f"Выбранный товар: {item['name']}\n"
-        f"Описание: {item['description']}\n"
+        f"Выбранный товар: {item['name']}\n\n"
+        f"Описание: {item['description']}\n\n"
         f"Время действия: {item['duration_text']}{extra_info}"
     )
 
