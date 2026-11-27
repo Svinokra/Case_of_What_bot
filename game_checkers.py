@@ -327,7 +327,10 @@ async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn
         winner_user = game["black_user"]
         winner_emoji = "⚫"
 
-    give_coins(winner_user.id, winner_user.username, winner_user.full_name, 20)
+    buffs = menu_shop.get_user_buffs(winner_user.id)
+    reward = 40 if buffs["doubler"] else 20
+
+    give_coins(winner_user.id, winner_user.username, winner_user.full_name, reward)
     winner_mention = format_mention(winner_user)
 
     builder = InlineKeyboardBuilder()
@@ -337,7 +340,7 @@ async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn
     await callback.message.edit_text(
         text=(
             f"{winner_mention} {winner_emoji} выиграл!\n\n"
-            f"Победителю начисляется 20 СЧ койнов"
+            f"Победителю начисляется {reward} СЧ койнов"
         ),
         reply_markup=builder.as_markup()
     )
@@ -366,7 +369,10 @@ async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str)
         loser_emoji = "⚫"
         winner_user = game["white_user"]
 
-    give_coins(winner_user.id, winner_user.username, winner_user.full_name, 6)
+    buffs = menu_shop.get_user_buffs(winner_user.id)
+    reward = 12 if buffs["doubler"] else 6
+
+    give_coins(winner_user.id, winner_user.username, winner_user.full_name, reward)
     loser_mention = format_mention(loser_user)
 
     builder = InlineKeyboardBuilder()
@@ -376,7 +382,7 @@ async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str)
     await callback.message.edit_text(
         text=(
             f"{loser_mention} {loser_emoji} сдался!\n\n"
-            f"Победителю начислено 6 СЧ койнов"
+            f"Победителю начислено {reward} СЧ койнов"
         ),
         reply_markup=builder.as_markup()
     )
