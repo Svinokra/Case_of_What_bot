@@ -59,6 +59,55 @@ async def cmd_attention_message(message: types.Message):
         logging.error(f"Ошибка при отправке объявления в группу: {e}")
         await message.answer("Не удалось отправить сообщение в группу, проверьте права бота.")
 
+# КОМАНДЫ УПРАВЛЕНИЯ БАЛАНСОМ В ЛС (ТОЛЬКО ДЛЯ СОЗДАТЕЛЯ БОТА)
+@dp.message(Command("givecoins", "minuscoins"), F.chat.type == "private")
+async def cmd_manage_coins(message: types.Message):
+    clean_owner_username = OWNER_USERNAME.lstrip("@").lower()
+    user_username = (message.from_user.username or "").lower()
+
+    if message.from_user.id != OWNER_ID or user_username != clean_owner_username:
+        await message.answer("Эта команда недоступна для вас")
+        return
+
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        await message.answer("Укажите сумму. Пример: /givecoins 1000 или /minuscoins 1000")
+        return
+
+    cmd, amount_str = parts
+    if not amount_str.isdigit() or int(amount_str) <= 0:
+        await message.answer("Введите положительное целое число")
+        return
+
+    amount = int(amount_str)
+    user = message.from_user
+
+    import menu_profile
+    menu_profile.get_or_create_profile(user.id, user.username, user.full_name)
+    conn = menu_profile.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user.id,))
+        row = cursor.fetchone()
+        (current_coins,) = row if row else (0,)
+
+        if cmd.startswith("/givecoins"):
+            new_coins = current_coins + amount
+            cursor.execute("UPDATE user_profiles SET coins = %s WHERE user_id = %s", (new_coins, user.id))
+            conn.commit()
+            await message.answer(f"Начислено {amount} СЧ койнов. Ваш баланс: {new_coins}")
+        else:
+            if current_coins <= 0 or current_coins < amount:
+                await message.answer(f"Ошибка: Недостаточно СЧ койнов для списания (на балансе: {current_coins})")
+                return
+            new_coins = current_coins - amount
+            cursor.execute("UPDATE user_profiles SET coins = %s WHERE user_id = %s", (new_coins, user.id))
+            conn.commit()
+            await message.answer(f"Списано {amount} СЧ койнов. Ваш баланс: {new_coins}")
+    finally:
+        cursor.close()
+        conn.close()
+
 @dp.message(F.chat.type == "private")
 async def handle_private_messages(message: types.Message):
     await message.answer("Бот работает только в группе Случай Чего, напишите владельцу группы о вступлении: @SlavaUmni")
