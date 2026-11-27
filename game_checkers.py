@@ -1,29 +1,30 @@
 from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import menu_profile
+import menu_shop
 
-# Ожидающие соперника:
-# {host_id: {"chat_id": int, "thread_id": int | None, "msg_id": int, "host_name": str}}
 checkers_lobbies = {}
-
-# Активные партии:
-# {game_id: dict_with_game_state}
 checkers_games = {}
-
-# Привязка игрока к текущей активной партии: {user_id: game_id}
 player_active_game = {}
 
-def give_coins(user_id: int, username: str, full_name: str, amount: int):
-    menu_profile.get_or_create_profile(user_id, username, full_name)
+
+def format_mention(user: types.User) -> str:
+    return f"@{user.username}" if user.username else user.first_name
+
+
+def give_coins(user: types.User, amount: int):
+    uname = user.username if user.username else ""
+    fname = user.full_name if user.full_name else "Участник"
+    menu_profile.get_or_create_profile(user.id, uname, fname)
     conn = menu_profile.get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user_id,))
+        cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user.id,))
         row = cursor.fetchone()
         (current_coins,) = row if row else (0,)
         cursor.execute(
             "UPDATE user_profiles SET coins = %s WHERE user_id = %s",
-            (current_coins + amount, user_id)
+            (current_coins + amount, user.id)
         )
         conn.commit()
     finally:
@@ -31,33 +32,29 @@ def give_coins(user_id: int, username: str, full_name: str, amount: int):
         conn.close()
 
 
-def format_mention(user: types.User) -> str:
-    return f"@{user.username}" if user.username else user.first_name
-
-
 def create_initial_board():
-    """Создаёт доску 8x8. Сверху (ряды 0..2) чёрные, снизу (ряды 5..7) белые."""
     board = [["" for _ in range(8)] for _ in range(8)]
     for r in range(8):
         for c in range(8):
             if (r + c) % 2 == 1:
                 if r < 3:
-                    board[r][c] = "b"  # чёрная обычная
+                    board[r][c] = "b"
                 elif r > 4:
-                    board[r][c] = "w"  # белая обычная
+                    board[r][c] = "w"
     return board
 
 
 async def start_checkers_search(callback: types.CallbackQuery):
     user = callback.from_user
-    owner_id = int(callback.data.split(":")[-1])
+    _, owner_str = callback.data.split(":")
+    owner_id = int(owner_str)
 
     if user.id in player_active_game:
-        await callback.answer("Вы уже участвуете в активной партии!", show_alert=True)
+        await callback.answer("Вы уже участвуете в другой партии", show_alert=True)
         return
 
     if user.id in checkers_lobbies:
-        await callback.answer("Вы уже ищете соперника!", show_alert=True)
+        await callback.answer("Вы уже ищете соперника", show_alert=True)
         return
 
     builder = InlineKeyboardBuilder()
@@ -74,14 +71,14 @@ async def start_checkers_search(callback: types.CallbackQuery):
 
     checkers_lobbies[user.id] = {
         "chat_id": callback.message.chat.id,
-        "thread_id": getattr(callback.message, "message_thread_id", None),
         "msg_id": callback.message.message_id,
         "host_user": user,
     }
 
 
 async def cancel_checkers_search(callback: types.CallbackQuery):
-    owner_id = int(callback.data.split(":")[-1])
+    _, owner_str = callback.data.split(":")
+    owner_id = int(owner_str)
     checkers_lobbies.pop(owner_id, None)
     import menu_games
     await menu_games.open_games(callback)
@@ -92,12 +89,10 @@ async def process_join_checkers(message: types.Message) -> bool:
     if not guest or guest.is_bot:
         return False
 
-    # Проверяем, что это Reply на сообщение поиска соперника
     reply_msg = message.reply_to_message
     if not reply_msg or getattr(reply_msg, "forum_topic_created", None) is not None:
         return False
 
-    # Ищем лобби по ID сообщения
     target_host_id = None
     for host_id, lobby in checkers_lobbies.items():
         if lobby["chat_id"] == message.chat.id and lobby["msg_id"] == reply_msg.message_id:
@@ -107,7 +102,6 @@ async def process_join_checkers(message: types.Message) -> bool:
     if target_host_id is None:
         return False
 
-    # Нельзя присоединиться к самому себе или если уже в другой игре
     if guest.id == target_host_id:
         return False
     if guest.id in player_active_game or target_host_id in player_active_game:
@@ -116,7 +110,6 @@ async def process_join_checkers(message: types.Message) -> bool:
     lobby = checkers_lobbies.pop(target_host_id)
     host_user = lobby["host_user"]
 
-    # Убираем кнопку "Назад" у сообщения поиска
     try:
         await message.bot.edit_message_reply_markup(
             chat_id=lobby["chat_id"],
@@ -129,51 +122,34 @@ async def process_join_checkers(message: types.Message) -> bool:
     game_id = f"{host_user.id}_{guest.id}"
     game = {
         "game_id": game_id,
-        "chat_id": message.chat.id,
         "white_id": host_user.id,
         "white_user": host_user,
         "black_id": guest.id,
         "black_user": guest,
-        "turn": "w",          # 'w' (белые) или 'b' (чёрные)
+        "turn": "w",
         "move_num": 1,
         "board": create_initial_board(),
-        "selected": None,     # (r, c) выбранной шашки
-        "must_capture_from": None,  # (r, c) если идёт комбо-рубка одной шашкой
-        "msg_id": None,
+        "selected": None,
+        "must_capture_from": None,
     }
 
     checkers_games[game_id] = game
     player_active_game[host_user.id] = game_id
     player_active_game[guest.id] = game_id
 
-    # Отрисовываем доску и отправляем сообщение начала партии (функция будет в Части 2)
     text, markup = render_board_message(game)
-    board_msg = await message.answer(text=text, reply_markup=markup)
-    game["msg_id"] = board_msg.message_id
-
-    import bot as main_bot
-    main_bot.user_menus[host_user.id] = board_msg.message_id
-    main_bot.user_menus[guest.id] = board_msg.message_id
+    await message.answer(text=text, reply_markup=markup)
     return True
 
 def is_own_piece(piece: str, turn: str) -> bool:
-    if not piece:
-        return False
-    return piece.lower() == turn
+    return bool(piece) and piece.lower() == turn
 
 
 def is_enemy_piece(piece: str, turn: str) -> bool:
-    if not piece:
-        return False
-    return piece.lower() != turn
+    return bool(piece) and piece.lower() != turn
 
 
 def get_piece_moves(board, r: int, c: int):
-    """
-    Возвращает два словаря для шашки на (r, c):
-    quiet_moves: {(to_r, to_c): None}
-    captures: {(to_r, to_c): (captured_r, captured_c)}
-    """
     piece = board[r][c]
     if not piece:
         return {}, {}
@@ -186,14 +162,12 @@ def get_piece_moves(board, r: int, c: int):
     directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
 
     if not is_king:
-        # Тихие ходы: белые идут вверх (dr = -1), чёрные вниз (dr = +1)
         forward_dr = -1 if turn == "w" else 1
         for dc in (-1, 1):
             nr, nc = r + forward_dr, c + dc
             if 0 <= nr < 8 and 0 <= nc < 8 and board[nr][nc] == "":
                 quiet_moves[(nr, nc)] = None
 
-        # Рубка: во все 4 диагональные стороны
         for dr, dc in directions:
             mr, mc = r + dr, c + dc
             lr, lc = r + 2 * dr, c + 2 * dc
@@ -201,7 +175,6 @@ def get_piece_moves(board, r: int, c: int):
                 if is_enemy_piece(board[mr][mc], turn) and board[lr][lc] == "":
                     captures[(lr, lc)] = (mr, mc)
     else:
-        # Дамка: скользит по всем 4 диагоналям
         for dr, dc in directions:
             step = 1
             enemy_pos = None
@@ -217,14 +190,11 @@ def get_piece_moves(board, r: int, c: int):
                     elif is_enemy_piece(cell, turn):
                         enemy_pos = (nr, nc)
                     else:
-                        # Упёрлись в свою шашку
                         break
                 else:
-                    # Уже перепрыгнули одну вражескую шашку — ищем пустые клетки за ней
                     if cell == "":
                         captures[(nr, nc)] = enemy_pos
                     else:
-                        # Упёрлись во вторую шашку подряд — дальше нельзя
                         break
                 step += 1
 
@@ -238,16 +208,6 @@ def count_player_pieces(board, turn: str) -> int:
             if is_own_piece(board[r][c], turn):
                 total += 1
     return total
-
-
-def has_any_legal_move(board, turn: str) -> bool:
-    for r in range(8):
-        for c in range(8):
-            if is_own_piece(board[r][c], turn):
-                q, cap = get_piece_moves(board, r, c)
-                if q or cap:
-                    return True
-    return False
 
 
 def render_board_message(game: dict):
@@ -269,14 +229,12 @@ def render_board_message(game: dict):
     if must_from is not None:
         header_text += "\n🔥 Комбо-рубка! Продолжайте рубить этой шашкой"
 
-    # Считаем подсказки (✅ и 💥) для выбранной шашки
     quiet_targets = {}
     capture_targets = {}
     if selected is not None:
         sr, sc = selected
         q, cap = get_piece_moves(board, sr, sc)
         capture_targets = cap
-        # Если идёт комбо-рубка, тихие ходы запрещены — можно только рубить дальше
         if must_from is None:
             quiet_targets = q
 
@@ -297,15 +255,11 @@ def render_board_message(game: dict):
             elif cell == "B":
                 symbol = "⬛"
             else:
-                # Тёмная пустая клетка помечается точкой, светлая — пробелом
                 symbol = "·" if (r + c) % 2 == 1 else " "
 
             builder.button(text=symbol, callback_data=f"ck_c:{r}:{c}:{game_id}")
 
-    # 9-й ряд: кнопка "Сдаться"
     builder.button(text="Сдаться", callback_data=f"ck_surrender:{game_id}")
-
-    # 8 рядов по 8 клеток + 1 ряд с кнопкой Сдаться
     builder.adjust(8, 8, 8, 8, 8, 8, 8, 8, 1)
 
     return header_text, builder.as_markup()
@@ -318,6 +272,8 @@ def cleanup_game(game: dict):
 
 
 async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn: str):
+    cleanup_game(game)
+
     if winner_turn == "w":
         winner_user = game["white_user"]
         winner_emoji = "⚪"
@@ -325,13 +281,21 @@ async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn
         winner_user = game["black_user"]
         winner_emoji = "⚫"
 
-    buffs = menu_shop.get_user_buffs(winner_user.id)
-    reward = 40 if buffs["doubler"] else 20
+    reward = 20
+    try:
+        buffs = menu_shop.get_user_buffs(winner_user.id)
+        if buffs.get("doubler"):
+            reward = 40
+    except Exception:
+        pass
 
-    give_coins(winner_user.id, winner_user.username, winner_user.full_name, reward)
+    try:
+        give_coins(winner_user, reward)
+    except Exception:
+        pass
+
     winner_mention = format_mention(winner_user)
 
-    # Убираем кнопки со старой доски
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
@@ -348,7 +312,6 @@ async def finish_game_win(callback: types.CallbackQuery, game: dict, winner_turn
         ),
         reply_markup=builder.as_markup()
     )
-    cleanup_game(game)
 
 
 async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str):
@@ -363,6 +326,7 @@ async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str)
         return
 
     await callback.answer()
+    cleanup_game(game)
 
     if user_id == game["white_id"]:
         loser_user = game["white_user"]
@@ -373,13 +337,21 @@ async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str)
         loser_emoji = "⚫"
         winner_user = game["white_user"]
 
-    buffs = menu_shop.get_user_buffs(winner_user.id)
-    reward = 12 if buffs["doubler"] else 6
+    reward = 6
+    try:
+        buffs = menu_shop.get_user_buffs(winner_user.id)
+        if buffs.get("doubler"):
+            reward = 12
+    except Exception:
+        pass
 
-    give_coins(winner_user.id, winner_user.username, winner_user.full_name, reward)
+    try:
+        give_coins(winner_user, reward)
+    except Exception:
+        pass
+
     loser_mention = format_mention(loser_user)
 
-    # Убираем кнопки со старой доски
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
@@ -396,14 +368,13 @@ async def handle_checkers_surrender(callback: types.CallbackQuery, game_id: str)
         ),
         reply_markup=builder.as_markup()
     )
-    cleanup_game(game)
 
 
 async def handle_board_click(callback: types.CallbackQuery):
     data = callback.data
 
     if data.startswith("ck_surrender:"):
-        _, game_id = data.split(":", 1)
+        game_id = data.replace("ck_surrender:", "", 1)
         await handle_checkers_surrender(callback, game_id)
         return
 
@@ -435,7 +406,6 @@ async def handle_board_click(callback: types.CallbackQuery):
     must_from = game["must_capture_from"]
     clicked_piece = board[r][c]
 
-    # 1. Переключение на другую свою шашку (если не заблокированы в комбо-рубке)
     if is_own_piece(clicked_piece, turn):
         if must_from is not None and (r, c) != must_from:
             await callback.answer("Завершите серию взятий этой же шашкой", show_alert=True)
@@ -446,7 +416,6 @@ async def handle_board_click(callback: types.CallbackQuery):
         await callback.message.edit_text(text=text, reply_markup=markup)
         return
 
-    # 2. Если ни одна шашка не выбрана — игнорируем клик по пустой клетке
     if selected is None:
         await callback.answer()
         return
@@ -454,28 +423,24 @@ async def handle_board_click(callback: types.CallbackQuery):
     sr, sc = selected
     quiet_moves, captures = get_piece_moves(board, sr, sc)
 
-    # 3. Выполнение рубки (💥)
     if (r, c) in captures:
         cap_r, cap_c = captures[(r, c)]
         piece = board[sr][sc]
         board[sr][sc] = ""
         board[cap_r][cap_c] = ""
 
-        # Проверка превращения в дамку
         if piece == "w" and r == 0:
             piece = "W"
         elif piece == "b" and r == 7:
             piece = "B"
         board[r][c] = piece
 
-        # Проверяем, остались ли у соперника шашки
         enemy_turn = "b" if turn == "w" else "w"
         if count_player_pieces(board, enemy_turn) == 0:
             await callback.answer()
             await finish_game_win(callback, game, turn)
             return
 
-        # Проверяем комбо-рубку этой же шашкой с новой позиции (r, c)
         _, next_captures = get_piece_moves(board, r, c)
         if next_captures:
             game["selected"] = (r, c)
@@ -485,7 +450,6 @@ async def handle_board_click(callback: types.CallbackQuery):
             await callback.message.edit_text(text=text, reply_markup=markup)
             return
 
-        # Серия завершена — передаём ход сопернику
         game["selected"] = None
         game["must_capture_from"] = None
         game["turn"] = enemy_turn
@@ -496,12 +460,10 @@ async def handle_board_click(callback: types.CallbackQuery):
         await callback.message.edit_text(text=text, reply_markup=markup)
         return
 
-    # 4. Выполнение тихого хода (✅)
     if must_from is None and (r, c) in quiet_moves:
         piece = board[sr][sc]
         board[sr][sc] = ""
 
-        # Проверка превращения в дамку
         if piece == "w" and r == 0:
             piece = "W"
         elif piece == "b" and r == 7:
@@ -520,6 +482,7 @@ async def handle_board_click(callback: types.CallbackQuery):
         return
 
     await callback.answer()
+
 
 async def handle_checkers_callbacks(callback: types.CallbackQuery):
     data = callback.data
