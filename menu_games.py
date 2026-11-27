@@ -7,6 +7,7 @@ import random
 import game_mansion
 import game_checkers
 import game_minesweeper
+import menu_shop
 
 dice_waiting = {}
 
@@ -163,10 +164,20 @@ async def process_dice_bet(message: types.Message) -> bool:
     except Exception:
         pass
 
+import menu_shop
+    buffs = menu_shop.get_user_buffs(user.id)
+
     dice_msg = await message.reply_dice(emoji="🎲")
     rolled_value = dice_msg.dice.value
-
     await asyncio.sleep(5.0)
+
+    # Если не угадали, но активна "🍀 Удача" — 35% шанс на счастливый переброс
+    luck_rerolled = False
+    if rolled_value != bet and buffs["luck"] and random.random() < 0.35:
+        luck_rerolled = True
+        dice_msg = await dice_msg.reply_dice(emoji="🎲")
+        rolled_value = dice_msg.dice.value
+        await asyncio.sleep(5.0)
 
     menu_profile.get_or_create_profile(user.id, user.username, user.full_name)
     conn = menu_profile.get_db_connection()
@@ -177,10 +188,13 @@ async def process_dice_bet(message: types.Message) -> bool:
         (current_coins,) = row if row else (0,)
 
         if rolled_value == bet:
-            new_coins = current_coins + 8
+            reward = 16 if buffs["doubler"] else 8
+            new_coins = current_coins + reward
             cursor.execute("UPDATE user_profiles SET coins = %s WHERE user_id = %s", (new_coins, user.id))
             conn.commit()
-            outcome_line = "Итог: Выигрыш, на ваш баланс начислено 8 СЧ койнов"
+            outcome_line = f"Итог: Выигрыш, на ваш баланс начислено {reward} СЧ койнов"
+            if buffs["doubler"]:
+                outcome_line += " (⚡ x2)"
         else:
             if current_coins > 0:
                 new_coins = max(0, current_coins - 8)
@@ -193,7 +207,9 @@ async def process_dice_bet(message: types.Message) -> bool:
         cursor.close()
         conn.close()
 
+    luck_note = "🍀 Сработала Удача! Переброс кубика:\n" if luck_rerolled else ""
     result_text = (
+        f"{luck_note}"
         f"Выпало: {rolled_value}\n"
         f"Ваша ставка: {bet}\n\n"
         f"{outcome_line}"
