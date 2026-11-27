@@ -392,17 +392,16 @@ async def handle_board_click(callback: types.CallbackQuery):
     data = callback.data
 
     if data.startswith("ck_surrender:"):
-        game_id = data.split(":", 1)[1]
+        _, game_id = data.split(":", 1)
         await handle_checkers_surrender(callback, game_id)
         return
 
     if not data.startswith("ck_c:"):
         return
 
-    parts = data.split(":")
-    r = int(parts[1])
-    c = int(parts[2])
-    game_id = parts[3]
+    _, r_str, c_str, game_id = data.split(":")
+    r = int(r_str)
+    c = int(c_str)
 
     game = checkers_games.get(game_id)
     if not game:
