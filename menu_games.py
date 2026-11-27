@@ -5,6 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import menu_profile
 import random
 import game_mansion
+import game_checkers
 
 dice_waiting = {}
 
@@ -330,5 +331,9 @@ async def handle_games_callbacks(callback: types.CallbackQuery):
         await cancel_scanner_game(callback)
     elif data.startswith("game_mansion:"):
         await game_mansion.open_mansion_intro(callback)
-    elif data.startswith(("game_checkers:", "game_cases:", "game_minesweeper:")):
+    elif data.startswith("game_checkers:"):
+        await game_checkers.start_checkers_search(callback)
+    elif data.startswith("checkers_cancel:"):
+        await game_checkers.cancel_checkers_search(callback)
+    elif data.startswith(("game_cases:", "game_minesweeper:")):
         await callback.answer("Эта игра пока находится в разработке", show_alert=True)
