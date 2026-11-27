@@ -514,3 +514,11 @@ async def handle_board_click(callback: types.CallbackQuery):
         return
 
     await callback.answer()
+
+async def handle_checkers_callbacks(callback: types.CallbackQuery):
+    data = callback.data
+
+    if data.startswith("game_checkers:"):
+        await start_checkers_search(callback)
+    elif data.startswith("checkers_cancel:"):
+        await cancel_checkers_search(callback)
