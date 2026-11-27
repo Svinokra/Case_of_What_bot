@@ -4,6 +4,7 @@ from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import menu_profile
 import menu_games
+import menu_shop
 
 # Активные забеги в особняке:
 # {user_id: {"room": int, "collected": int, "pending_coins": int, "event": dict | None}}
@@ -205,6 +206,11 @@ async def leave_mansion(callback: types.CallbackQuery):
     collected = session["collected"] if session else 0
     set_mansion_cooldown(user.id)
 
+    import menu_shop
+    buffs = menu_shop.get_user_buffs(user.id)
+    if collected > 0 and buffs["doubler"]:
+        collected *= 2
+
     # Начисляем собранные койны на баланс, если игрок успел что-то собрать
     if collected > 0:
         menu_profile.get_or_create_profile(user.id, user.username, user.full_name)
@@ -234,6 +240,40 @@ async def leave_mansion(callback: types.CallbackQuery):
 
 async def finish_mansion_death(callback: types.CallbackQuery, owner_id: int, monster_name: str, is_wrong_choice: bool = False):
     user = callback.from_user
+    buffs = menu_shop.get_user_buffs(user.id)
+
+    if buffs["shields"] > 0:
+        conn = menu_profile.get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE user_buffs SET shields_count = GREATEST(0, shields_count - 1) WHERE user_id = %s",
+                (user.id,)
+            )
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+
+        session = mansion_sessions.get(owner_id)
+        if session:
+            session["room"] += 1
+
+        remaining_shields = buffs["shields"] - 1
+        builder = InlineKeyboardBuilder()
+        builder.button(text="Продолжить", callback_data=f"mansion_shield_next:{owner_id}")
+        builder.adjust(1)
+
+        await callback.message.edit_text(
+            text=(
+                f"🛡️ Сработала Защита\n\n"
+                f"{monster_name} напал на вас, но щит принял удар на себя и рассыпался\n"
+                f"Осталось щитов: {remaining_shields}/6"
+            ),
+            reply_markup=builder.as_markup()
+        )
+        return
+
     session = mansion_sessions.pop(owner_id, None)
     collected = session["collected"] if session else 0
 
@@ -288,6 +328,11 @@ async def open_mansion_door(callback: types.CallbackQuery):
     if room >= 10:
         last_coins = random.randint(5, 19)
         total_won = session["collected"] + last_coins
+
+        buffs = menu_shop.get_user_buffs(user.id)
+        if buffs["doubler"]:
+            total_won *= 2
+
         mansion_sessions.pop(owner_id, None)
         set_mansion_cooldown(user.id)
 
@@ -319,10 +364,14 @@ async def open_mansion_door(callback: types.CallbackQuery):
         return
 
     # Обычные комнаты (с 1 по 9): распределяем шанс события
+    buffs = menu_shop.get_user_buffs(user.id)
     roll = random.randint(1, 100)
 
-    # 1. Безопасная комната (50% шанс)
-    if roll <= 50:
+    safe_limit = 40 if buffs["luck"] else 50
+    choice_limit = 95 if buffs["luck"] else 80
+
+    # 1. Безопасная комната
+    if roll <= safe_limit:
         found_coins = random.randint(5, 19)
         session["pending_coins"] = found_coins
 
@@ -336,7 +385,7 @@ async def open_mansion_door(callback: types.CallbackQuery):
         )
 
     # 2. Опасная комната с выбором из 2 вариантов (30% шанс)
-    elif roll <= 80:
+    elif roll <= choice_limit:
         situation, right_btn, wrong_btn, monster = random.choice(CHOICE_EVENTS)
         session["monster"] = monster
 
@@ -408,3 +457,6 @@ async def handle_mansion_callbacks(callback: types.CallbackQuery):
         await handle_mansion_right_choice(callback)
     elif data.startswith("mansion_choice_bad:"):
         await handle_mansion_wrong_choice(callback)
+    elif data.startswith("mansion_shield_next:"):
+        owner_id = int(data.split(":")[-1])
+        await show_door_choice(callback, owner_id)
