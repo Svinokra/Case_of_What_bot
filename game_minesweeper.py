@@ -110,7 +110,7 @@ async def open_minesweeper_intro(callback: types.CallbackQuery):
         builder.adjust(1)
 
         await callback.message.edit_text(
-            text="Вы можете играть в сапёр только через 1 час",
+            text="Вы можете играть в сапёр только через 20 секунд",
             reply_markup=builder.as_markup()
         )
         return
