@@ -170,13 +170,8 @@ async def process_dice_bet(message: types.Message) -> bool:
     rolled_value = dice_msg.dice.value
     await asyncio.sleep(5.0)
 
-    # Если не угадали, но активна "🍀 Удача" — 35% шанс на счастливый переброс
-    luck_rerolled = False
-    if rolled_value != bet and buffs["luck"] and random.random() < 0.35:
-        luck_rerolled = True
-        dice_msg = await dice_msg.reply_dice(emoji="🎲")
-        rolled_value = dice_msg.dice.value
-        await asyncio.sleep(5.0)
+    # С активной "🍀 Удачей" засчитывается точное попадание ИЛИ соседнее число (±1), шанс 50%
+    is_win = (rolled_value == bet) or (buffs["luck"] and abs(rolled_value - bet) <= 1)
 
     menu_profile.get_or_create_profile(user.id, user.username, user.full_name)
     conn = menu_profile.get_db_connection()
@@ -186,7 +181,7 @@ async def process_dice_bet(message: types.Message) -> bool:
         row = cursor.fetchone()
         (current_coins,) = row if row else (0,)
 
-        if rolled_value == bet:
+        if is_win:
             reward = 16 if buffs["doubler"] else 8
             new_coins = current_coins + reward
             cursor.execute("UPDATE user_profiles SET coins = %s WHERE user_id = %s", (new_coins, user.id))
@@ -206,7 +201,7 @@ async def process_dice_bet(message: types.Message) -> bool:
         cursor.close()
         conn.close()
 
-    luck_note = "🍀 Сработала Удача! Переброс кубика:\n" if luck_rerolled else ""
+    luck_note = "🍀 Бонус Удачи: засчитывается ±1 от ставки\n" if (buffs["luck"] and rolled_value != bet and is_win) else ""
     result_text = (
         f"{luck_note}"
         f"Выпало: {rolled_value}\n"
@@ -259,13 +254,13 @@ def build_scanner_result(target_mention: str, percent: int) -> str:
         arrow = "🔺"
         status = f"Уровень: Безопасный ({percent}% дозы) 😇"
     elif percent <= 28:
-        arrow = "       🔺"
+        arrow = "      🔺"
         status = f"Уровень: Низкий ({percent}% дозы) 😊"
     elif percent <= 42:
-        arrow = "              🔺"
+        arrow = "            🔺"
         status = f"Уровень: Умеренный ({percent}% дозы) 🙂"
     elif percent <= 57:
-        arrow = "                    🔺"
+        arrow = "                  🔺"
         status = f"Уровень: Средний ({percent}% дозы) 😐"
     elif percent <= 71:
         arrow = "                           🔺"
