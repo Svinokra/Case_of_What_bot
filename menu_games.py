@@ -46,7 +46,7 @@ def get_dice_cooldown(user_id: int) -> bool:
         (last_played,) = row
         if not last_played:
             return False
-        return datetime.now() < last_played + timedelta(hours=1)
+        return datetime.now() < last_played + timedelta(seconds=20)
     finally:
         cursor.close()
         conn.close()
@@ -98,7 +98,7 @@ async def start_dice_game(callback: types.CallbackQuery):
         builder.adjust(1)
 
         await callback.message.edit_text(
-            text="Вы можете играть в кости только через 1 час",
+            text="Вы можете играть в кости только через 20 секунд",
             reply_markup=builder.as_markup()
         )
         return
