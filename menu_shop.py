@@ -6,13 +6,6 @@ import menu_profile
 # Справочник всех товаров магазина (удобно менять цены, описания и время действия)
 SHOP_ITEMS = {
     # Категория "Полезное"
-    "time_boost": {
-        "category": "useful",
-        "name": "⌛ Ускоритель времени",
-        "description": "Сокращает время ожидания игр Кости, Особняк, Сапёр на 20 минут",
-        "duration_text": "После покупки моментально активируется 1 раз",
-        "price": 15,
-    },
     "luck": {
         "category": "useful",
         "name": "🍀 Удача",
@@ -25,7 +18,7 @@ SHOP_ITEMS = {
         "name": "🛡️ Защита",
         "description": "Попав в опасную комнату особняка то щит сразу активируется и вы спасёте свою жизнь, вы можете купить только 6 штук",
         "duration_text": "Однократное авто использование",
-        "price": 30,
+        "price": 35,
     },
     "doubler": {
         "category": "useful",
@@ -115,12 +108,11 @@ async def open_shop_category(callback: types.CallbackQuery, category: str, owner
     builder = InlineKeyboardBuilder()
 
     if category == "useful":
-        builder.button(text="⌛ Ускоритель времени", callback_data=f"shop_item:time_boost:{owner_id}")
         builder.button(text="🍀 Удача", callback_data=f"shop_item:luck:{owner_id}")
         builder.button(text="🛡️ Защита", callback_data=f"shop_item:shield:{owner_id}")
         builder.button(text="⚡ Удвоитель", callback_data=f"shop_item:doubler:{owner_id}")
         builder.button(text="Назад", callback_data=f"menu_shop:{owner_id}")
-        builder.adjust(1, 2, 1, 1)
+        builder.adjust(2, 1, 1)
         text = "Категория: Полезное\n\nВыберите товар:"
     else:
         builder.button(text=SHOP_ITEMS["rofl_item"]["name"], callback_data=f"shop_item:rofl_item:{owner_id}")
@@ -178,18 +170,35 @@ async def buy_shop_item(callback: types.CallbackQuery, item_key: str, owner_id: 
 
         if current_coins < price:
             await callback.answer(
-                f"Недостаточно СЧ койнов! Нужно {price}, у вас {current_coins}",
+                f"Недостаточно СЧ койнов. Нужно {price}, у вас {current_coins}",
                 show_alert=True
             )
             return
 
-        # 2. Спец-проверка лимита для Щита (максимум 6 штук)
+        # 2. Проверка лимитов и уже активных бустов
+        now = datetime.now()
         if item_key == "shield":
             cursor.execute("SELECT shields_count FROM user_buffs WHERE user_id = %s", (user.id,))
             s_row = cursor.fetchone()
             (current_shields,) = s_row if s_row else (0,)
             if (current_shields or 0) >= 6:
-                await callback.answer("Вы уже купили максимум щитов (6/6)!", show_alert=True)
+                await callback.answer("Вы уже купили максимум щитов (6/6)", show_alert=True)
+                return
+
+        elif item_key == "luck":
+            cursor.execute("SELECT luck_until FROM user_buffs WHERE user_id = %s", (user.id,))
+            l_row = cursor.fetchone()
+            (luck_until,) = l_row if l_row else (None,)
+            if luck_until and now < luck_until:
+                await callback.answer("Буст 🍀 Удача у вас уже активен", show_alert=True)
+                return
+
+        elif item_key == "doubler":
+            cursor.execute("SELECT double_until FROM user_buffs WHERE user_id = %s", (user.id,))
+            d_row = cursor.fetchone()
+            (double_until,) = d_row if d_row else (None,)
+            if double_until and now < double_until:
+                await callback.answer("Буст ⚡ Удвоитель у вас уже активен", show_alert=True)
                 return
 
         # 3. Списываем СЧ койны
@@ -198,17 +207,7 @@ async def buy_shop_item(callback: types.CallbackQuery, item_key: str, owner_id: 
 
         # 4. Применяем эффект товара
         now = datetime.now()
-        if item_key == "time_boost":
-            import menu_games
-            menu_games.ensure_cooldowns_table()
-            cursor.execute("""
-                UPDATE game_cooldowns
-                SET last_played = last_played - INTERVAL '20 minutes'
-                WHERE user_id = %s AND game_name IN ('dice', 'mansion', 'minesweeper')
-            """, (user.id,))
-            result_msg = "Вы успешно купили и активировали ⌛ Ускоритель времени!\nВремя ожидания игр Кости, Особняк и Сапёр сокращено на 20 минут"
-
-        elif item_key == "luck":
+        if item_key == "luck":
             luck_until = now + timedelta(minutes=5)
             cursor.execute("""
                 INSERT INTO user_buffs (user_id, luck_until)
