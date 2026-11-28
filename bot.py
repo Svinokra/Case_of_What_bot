@@ -236,8 +236,6 @@ async def handle_menu_clicks(callback: types.CallbackQuery):
     if callback.from_user.id != owner_id:
         await callback.answer("Это меню принадлежит другому пользователю", show_alert=True)
         return
-        
-    await callback.answer()
 
     # Кнопка НАЗАД из профиля в главное меню бота
     if action_data == "back_to_menu":
