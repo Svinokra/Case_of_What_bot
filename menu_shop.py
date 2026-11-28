@@ -79,6 +79,12 @@ def get_user_buffs(user_id: int) -> dict:
 
         luck_until, double_until, shields_count = row
         now = datetime.now()
+
+        if luck_until and getattr(luck_until, "tzinfo", None):
+            luck_until = luck_until.replace(tzinfo=None)
+        if double_until and getattr(double_until, "tzinfo", None):
+            double_until = double_until.replace(tzinfo=None)
+
         return {
             "luck": bool(luck_until and now < luck_until),
             "doubler": bool(double_until and now < double_until),
@@ -189,16 +195,30 @@ async def buy_shop_item(callback: types.CallbackQuery, item_key: str, owner_id: 
             cursor.execute("SELECT luck_until FROM user_buffs WHERE user_id = %s", (user.id,))
             l_row = cursor.fetchone()
             (luck_until,) = l_row if l_row else (None,)
+            if luck_until and getattr(luck_until, "tzinfo", None):
+                luck_until = luck_until.replace(tzinfo=None)
             if luck_until and now < luck_until:
-                await callback.answer("Буст 🍀 Удача у вас уже активен", show_alert=True)
+                remaining_sec = int((luck_until - now).total_seconds())
+                mins, secs = divmod(max(0, remaining_sec), 60)
+                await callback.answer(
+                    f"Буст 🍀 Удача у вас уже активен. Осталось: {mins} мин. {secs} сек.",
+                    show_alert=True
+                )
                 return
 
         elif item_key == "doubler":
             cursor.execute("SELECT double_until FROM user_buffs WHERE user_id = %s", (user.id,))
             d_row = cursor.fetchone()
             (double_until,) = d_row if d_row else (None,)
+            if double_until and getattr(double_until, "tzinfo", None):
+                double_until = double_until.replace(tzinfo=None)
             if double_until and now < double_until:
-                await callback.answer("Буст ⚡ Удвоитель у вас уже активен", show_alert=True)
+                remaining_sec = int((double_until - now).total_seconds())
+                mins, secs = divmod(max(0, remaining_sec), 60)
+                await callback.answer(
+                    f"Буст ⚡ Удвоитель у вас уже активен. Осталось: {mins} мин. {secs} сек.",
+                    show_alert=True
+                )
                 return
 
         # 3. Списываем СЧ койны
