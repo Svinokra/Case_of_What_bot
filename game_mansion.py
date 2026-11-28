@@ -61,8 +61,8 @@ CHOICE_EVENTS = [
     ),
     (
         "Вы увидели Балку",
-        "Обернуться и побежать",
         "Смотреть на неё",
+        "Обернуться и побежать",
         "Балка",
     ),
     (
@@ -377,10 +377,10 @@ async def open_mansion_door(callback: types.CallbackQuery):
     buffs = menu_shop.get_user_buffs(user.id)
     roll = random.randint(1, 100)
 
-    # Без Удачи: 40% безопасная, 35% с выбором, 25% моментальная опасная
-    # С Удачей:  45% безопасная, 40% с выбором, 15% моментальная опасная
-    safe_limit = 45 if buffs["luck"] else 40
-    choice_limit = 85 if buffs["luck"] else 75
+    # Без Удачи: 50% безопасная, 15% редкий выбор, 35% опасная комната
+    # С Удачей:  50% безопасная, 35% выбор, 15% опасная комната
+    safe_limit = 50
+    choice_limit = 85 if buffs["luck"] else 65
 
     # 1. Безопасная комната
     if roll <= safe_limit:
