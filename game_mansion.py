@@ -28,6 +28,9 @@ MONSTERS = [
     "Амальгама",
     "Бурмалда",
     "Обречённый",
+    "Юц",
+    "Тум",
+    "Большой свечка",
 ]
 
 # Заготовки комнат с выбором: (текст ситуации, правильная кнопка, неправильная кнопка, имя монстра при ошибке)
@@ -62,6 +65,12 @@ CHOICE_EVENTS = [
         "Смотреть на неё",
         "Балка",
     ),
+    (
+        "Вы увидели свою копию которая просит вас пойти с ней кое куда",
+        "Пойти",
+        "Отказать",
+        "Юц",
+    ),
 ]
 
 def get_mansion_cooldown(user_id: int) -> bool:
@@ -79,7 +88,7 @@ def get_mansion_cooldown(user_id: int) -> bool:
         (last_played,) = row
         if not last_played:
             return False
-        return datetime.now() < last_played + timedelta(hours=1)
+        return datetime.now() < last_played + timedelta(seconds=20)
     finally:
         cursor.close()
         conn.close()
@@ -112,7 +121,7 @@ async def open_mansion_intro(callback: types.CallbackQuery):
         builder.adjust(1)
 
         await callback.message.edit_text(
-            text="Вы можете зайти в особняк только через 1 час",
+            text="Вы можете зайти в особняк только через 20 секунд",
             reply_markup=builder.as_markup()
         )
         return
@@ -126,9 +135,8 @@ async def open_mansion_intro(callback: types.CallbackQuery):
         "Добро пожаловать в особняк!\n\n"
         "Заходите в одну из трёх дверей которая приведёт вас либо к опасной комнате либо к безопасной, "
         "в безопасных комнатах вы найдёте СЧ койны и их количество от 5 до 19, собирайте их и продвигайтесь дальше "
-        "но если вам попалась опасная комната то вас моментально убьют и это проигрыш а собранные СЧ койны сгорят "
-        "и мы отнимем у вас столько на балансе сколько у вас было собранно СЧ койнов по прохождению особняка, "
-        "если у вас их меньше или 0 то они просто сгорят и ничего отнимать не будем (как в костях), "
+        "но если вам попалась опасная комната то вас моментально убьют и это проигрыш а собранные СЧ койны либо сгорят полностью "
+        "либо от них хоть что то да останется по прохождению особняка, "
         "ваша цель добраться до 10 комнаты в которой будет выход из особняка и ваши собранные по пути СЧ койны начисляться на баланс, "
         "ой я забыл что есть ещё и такие комнаты в которых вам нужно сделать правильный выбор чтобы выжить"
     )
@@ -143,7 +151,7 @@ async def start_mansion_run(callback: types.CallbackQuery):
         builder.button(text="Хорошо", callback_data=f"menu_games:{owner_id}")
         builder.adjust(1)
         await callback.message.edit_text(
-            text="Вы можете зайти в особняк только через 1 час",
+            text="Вы можете зайти в особняк только через 20 секунд",
             reply_markup=builder.as_markup()
         )
         return
@@ -279,23 +287,27 @@ async def finish_mansion_death(callback: types.CallbackQuery, owner_id: int, mon
     set_mansion_cooldown(user.id)
     menu_profile.get_or_create_profile(user.id, user.username, user.full_name)
 
-    conn = menu_profile.get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user.id,))
-        row = cursor.fetchone()
-        (current_coins,) = row if row else (0,)
+    # Оставляем игроку только 15% от собранного куша ("сухие копейки")
+    scraps = int(collected * 0.15)
 
-        if collected > 0 and current_coins >= collected:
-            new_coins = current_coins - collected
-            cursor.execute("UPDATE user_profiles SET coins = %s WHERE user_id = %s", (new_coins, user.id))
+    if scraps > 0:
+        conn = menu_profile.get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT coins FROM user_profiles WHERE user_id = %s", (user.id,))
+            row = cursor.fetchone()
+            (current_coins,) = row if row else (0,)
+            cursor.execute(
+                "UPDATE user_profiles SET coins = %s WHERE user_id = %s",
+                (current_coins + scraps, user.id)
+            )
             conn.commit()
-            outcome_text = f"Проигрыш, мы отнимаем у вас {collected} СЧ койнов"
-        else:
-            outcome_text = "Проигрыш, собранные СЧ койны сгорели"
-    finally:
-        cursor.close()
-        conn.close()
+        finally:
+            cursor.close()
+            conn.close()
+        outcome_text = f"Проигрыш, почти весь куш сгорел но вам удалось унести {scraps} СЧ койнов"
+    else:
+        outcome_text = "Проигрыш, все собранные СЧ койны сгорели"
 
     if is_wrong_choice:
         header = f"Неправильный выбор, {monster_name} убил вас"
@@ -310,7 +322,6 @@ async def finish_mansion_death(callback: types.CallbackQuery, owner_id: int, mon
         text=f"{header}\n\n{outcome_text}",
         reply_markup=builder.as_markup()
     )
-
 
 async def open_mansion_door(callback: types.CallbackQuery):
     user = callback.from_user
@@ -366,10 +377,10 @@ async def open_mansion_door(callback: types.CallbackQuery):
     buffs = menu_shop.get_user_buffs(user.id)
     roll = random.randint(1, 100)
 
-    # Без Удачи: 30% безопасная, 35% с выбором, 35% моментальная опасная
-    # С Удачей:  35% безопасная, 45% с выбором, 20% моментальная опасная
-    safe_limit = 35 if buffs["luck"] else 30
-    choice_limit = 80 if buffs["luck"] else 65
+    # Без Удачи: 40% безопасная, 35% с выбором, 25% моментальная опасная
+    # С Удачей:  45% безопасная, 40% с выбором, 15% моментальная опасная
+    safe_limit = 45 if buffs["luck"] else 40
+    choice_limit = 85 if buffs["luck"] else 75
 
     # 1. Безопасная комната
     if roll <= safe_limit:
