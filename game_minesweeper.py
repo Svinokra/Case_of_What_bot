@@ -28,7 +28,7 @@ def get_minesweeper_cooldown(user_id: int) -> bool:
         (last_played,) = row
         if not last_played:
             return False
-        return datetime.now() < last_played + timedelta(hours=1)
+        return datetime.now() < last_played + timedelta(seconds=20)
     finally:
         cursor.close()
         conn.close()
@@ -220,7 +220,7 @@ async def start_minesweeper_game(callback: types.CallbackQuery):
         builder.button(text="Хорошо", callback_data=f"menu_games:{owner_id}")
         builder.adjust(1)
         await callback.message.edit_text(
-            text="Вы можете играть в сапёр только через 1 час",
+            text="Вы можете играть в сапёр только через 20 секунд",
             reply_markup=builder.as_markup()
         )
         return
